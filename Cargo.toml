@@ -1,0 +1,6 @@
+[package]
+name = "shell"
+version = "0.1.0"
+authors = ["Daichi Hirono <hidachinoiro@gmail.com>"]
+
+[dependencies]
