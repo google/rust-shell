@@ -1,27 +1,104 @@
-use std::path::PathBuf;
+//! # Rushell - shell script in rust.
+//!
+//! Rushell is a library which helps you write shell script like tasks easily
+//! in rust.
+//!
+//! ## Command
+//!
+//! Command is a spec descripbing everything required to launch a new process.
+//! To generate a Command, you can use cmd! macro.
+//!
+//! ```
+//! let command = cmd!("echo test");
+//! ```
+//!
+//! You can specify an argument by using rust value as well.
+//!
+//! ```
+//! let name = "John";
+//! let command = cmd!("echo My name is {}.", name);
+//! ```
+//!
+//! ## Running command
+//!
+//! After creating a command. There are several ways to run it. The simplest
+//! way is calling run method of command.
+//!
+//! ```
+//! fn my_shell_script(): ShellError {
+//!   cmd!("echo test").run()?;
+//!   cmd!("echo test").run()?;
+//!   Ok(())
+//! }
+//! ```
+//!
+//! Command returns a std::result::Result<(), ShellError>. So you can easily
+//! check an error with try operator (?). It ruturns Result::Ok only when
+//! command runs successfully and it returns 0 error code.
+//!
+//! ## Async control
+//!
+//! If you would like to run a command asynchronously, call async() instead of
+//! run(). async() returns JobHandler which you can use to kill or wait the
+//! running process. JobHandler automatically invokes wait() when it's dropped.
+//! So you will not get a zombi process. You can explicitly detach a process 
+//! from job handler by calling detach() if you want to.
+//!
+//! ```
+//! let command = cmd!("sleep 100");
+//! let job = command.async();
+//! job.wait();
+//! ```
+//!
+//! # Subshell
+//!
+//! You can create a subshell which is a separated process to run shell
+//! command by using subshell() function. subshell() returns a command so
+//! that you can call run(), async() as well as a normal external command.
+//!
+//! ```
+//! rushell::subshell(|| {
+//!     // Running in a separated process so changing current directory does
+//!     // not affect a parante process.
+//!     rushell::cd("./hoge")?;
+//!     rushell::set_env("ENV_NAME", "HOGE")?;
+//!     Ok(())
+//! }).run()?;
+//! ```
+//!
+
+
+extern crate libc;
+
 use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
 use std::process::Command;
-use std::process::ExitStatus;
-use std::sync::Arc;
-use std::sync::Mutex;
+
+pub enum ShellError {
+    Code(i32),
+    Signal,
+    OtherError(Error)
+}
+
+impl std::convert::From<std::io::Error> for ShellError {
+    fn from(error: std::io::Error) -> ShellError {
+        ShellError::OtherError(error)
+    }
+}
+
+pub type ShellResult = std::result::Result<(), ShellError>;
+
+pub fn subshell<F>(_: F) where F: FnOnce() -> JobHandle {
+    let pid = unsafe { libc::fork() };
+    if pid == 0 {
+
+    }
+}
 
 /// Something which can be used as a command
 pub trait CommandLike where Self: Sized {
-    fn run(self, shell: &Shell) -> Result<()> {
-        self.status(shell).and_then(|s| {
-            if s.success() {
-                Ok(())
-            } else {
-                Err(Error::new(ErrorKind::Other, "Status code is not 0"))
-            }
-        })
-    }
-
-    fn async(self, shell: &Shell) -> AsyncJobHandle;
-
-    fn status(self, shell: &Shell) -> Result<ExitStatus>;
+    fn run(self) -> ShellResult;
+    fn async(self) -> JobHandle;
+    // TODO: fn output(self) -> ShellOutput;
 }
 
 /// Single Command
@@ -44,106 +121,62 @@ impl ShellCommand {
 }
 
 impl CommandLike for ShellCommand {
-    fn status(mut self, shell: &Shell) -> Result<ExitStatus> {
-        self.0.status()
+    fn run(mut self) -> ShellResult {
+        let status = self.0.status()?;
+        if status.success() {
+            return Ok(());
+        }
+        match status.code() {
+            Some(code) => Err(ShellError::Code(code)),
+            None => Err(ShellError::Signal)
+        }
     }
-    fn async(self, shell: &Shell) -> AsyncJobHandle {
+
+    fn async(self) -> JobHandle {
         unimplemented!();
     }
 }
 
 macro_rules! cmd {
-    ($format:expr) => (ShellCommand::new($format, &[]));
+    ($format:expr) => (::ShellCommand::new($format, &[]));
     ($format:expr, $($arg:expr),+) => 
-        (ShellCommand::new($format, &[$($arg),+]));
+        (::ShellCommand::new($format, &[$($arg),+]));
 }
 
 
 /// Block
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
-pub struct ShellBlock(Box<FnMut(&mut Shell) -> Result<()> + Send + 'static>);
+pub struct ShellBlock(Box<FnMut() -> ShellResult + Send + 'static>);
 
 impl CommandLike for ShellBlock {
-    fn async(mut self, shell: &Shell) -> AsyncJobHandle {
-        let mut subshell = shell.clone();
-        let job = AsyncJobHandle { status: subshell.status.clone() };
-        std::thread::spawn(move || {
-            self.0(&mut subshell)
-        });
-        job
+    fn async(mut self) -> JobHandle {
+        unimplemented!();
     }
 
-    fn status(self, shell: &Shell) -> Result<ExitStatus> {
+    fn run(self) -> ShellResult {
         unimplemented!();
     }
 }
 
-enum ShellStatus {
-    NotRunning,
-    Running(usize),
-    Killed
-}
+pub struct JobHandle { pid: usize }
 
-impl ShellStatus {
-    fn new() -> Arc<Mutex<ShellStatus>> {
-        Arc::new(Mutex::new(ShellStatus::NotRunning))
-    }
-}
-
-pub struct AsyncJobHandle {
-    status: Arc<Mutex<ShellStatus>>
-}
-
-impl AsyncJobHandle {
+impl JobHandle {
     pub fn kill(self) {
-        let mut lock = self.status.lock().expect(
-            "Failed to obtain mutex lock");
-        match *lock {
-            ShellStatus::NotRunning => {}
-            ShellStatus::Running(pid) => {}
-            ShellStatus::Killed => unreachable!() 
-        }
-        *lock = ShellStatus::Killed;
+        unsafe { libc::kill(-(self.pid as i32), libc::SIGINT); }
     }
 }
 
-impl Drop for AsyncJobHandle {
+impl Drop for JobHandle {
     fn drop(&mut self) {
     }
 }
 
-pub struct Shell {
-    current_directory: PathBuf,
-    status: Arc<Mutex<ShellStatus>>
-}
-
-impl Shell {
-    pub fn new() -> Shell {
-        Shell {
-            current_directory: PathBuf::new(),
-            status: ShellStatus::new()
-        }
-    }
-
-    pub fn cd(&mut self) {
-        unimplemented!();
-    }
-
-    pub fn clone(&self) -> Shell {
-        Shell {
-            current_directory: self.current_directory.clone(),
-            status: ShellStatus::new()
-        }
-    }
-
-}
-
 pub fn watch_for_rerun() -> ShellBlock {
-    ShellBlock(Box::new(move |shell| {
+    ShellBlock(Box::new(move || {
         loop {
             let bin = "foo";
-            cmd!("inotifywait -e close_write -r src").run(shell)?;
-            if cmd!("cargo build {}", bin).run(shell).is_ok()  {
+            cmd!("inotifywait -e close_write -r src").run()?;
+            if cmd!("cargo build {}", bin).run().is_ok()  {
                 break;
             }
         }
@@ -154,16 +187,25 @@ pub fn watch_for_rerun() -> ShellBlock {
 
 #[cfg(test)]
 mod tests {
+    use ::CommandLike;
+
     #[test]
     fn it_works() {
-        let shell = Shell::new();
-
-        ShellBlock(|shell| {
-            cmd!("echo hello {}", "hoge").run(shell)?;
-            let job = cmd!("hoge hoge").async();
-            job.kill();
+        fn body() -> ::ShellResult {
+            cmd!("echo Test").run()?;
             Ok(())
-        }).run(shell)?;
+        }
+
+        assert!(body().is_ok());
+
+        // let shell = Shell::new();
+
+        // ShellBlock(|shell| {
+        //     cmd!("echo hello {}", "hoge").run(shell)?;
+        //     let job = cmd!("hoge hoge").async();
+        //     job.kill();
+        //     Ok(())
+        // }).run(shell)?;
 
 
         // shell.watch_for_rerun();
