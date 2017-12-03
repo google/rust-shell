@@ -3,5 +3,14 @@ name = "shell"
 version = "0.1.0"
 authors = ["Daichi Hirono <hidachinoiro@gmail.com>"]
 
+[[bin]]
+name = "pgtest"
+path = "src/pgtest.rs"
+
+[[bin]]
+name = "raw_lib_test"
+path = "src/raw_lib_test.rs"
+
 [dependencies]
 libc = "0.2"
+errno = "*"

@@ -1,40 +1,54 @@
 //! # Rushell - shell script in rust.
 //!
-//! Rushell is a library which helps you write shell script like tasks easily
-//! in rust.
+//! Rushell is a helper library for std::process::Command, which allows you to
+//! write a shell script helps you to write a shell script in rust.
 //!
-//! ## Command
+//! ## cmd! macro
 //!
-//! Command is a spec descripbing everything required to launch a new process.
-//! To generate a Command, you can use cmd! macro.
+//! You can easiliy create Command instance by using cmd! macro.
 //!
 //! ```
-//! let command = cmd!("echo test");
+//! #[macro_use] extern crate shell;
+//! fn main() {
+//!   let command = cmd!("echo test");
+//! }
 //! ```
 //!
 //! You can specify an argument by using rust value as well.
 //!
 //! ```
-//! let name = "John";
-//! let command = cmd!("echo My name is {}.", name);
+//! #[macro_use] extern crate shell;
+//! # fn main() {
+//!   let name = "John";
+//!   let command = cmd!("echo My name is {}.", name);
+//! # }
 //! ```
 //!
 //! ## Running command
 //!
-//! After creating a command. There are several ways to run it. The simplest
-//! way is calling run method of command.
+//! Rushell adds run() method to Command, which returns ShellResult.  Because
+//! ShellResult regards exit code 0 is Ok and others are Err, you can easily
+//! check an error with try operator (?).
+//!
 //!
 //! ```
-//! fn my_shell_script(): ShellError {
+//! #[macro_use] extern crate shell;
+//! # use shell::ShellResult;
+//! # use shell::JobSpec;
+//! fn my_shell_script() -> ShellResult {
 //!   cmd!("echo test").run()?;
 //!   cmd!("echo test").run()?;
 //!   Ok(())
 //! }
+//! # fn main() {
+//! #   my_shell_script().unwrap();
+//! # }
 //! ```
 //!
-//! Command returns a std::result::Result<(), ShellError>. So you can easily
-//! check an error with try operator (?). It ruturns Result::Ok only when
-//! command runs successfully and it returns 0 error code.
+//! ## Output string
+//!
+//! output_utf8() and error_utf8() can be used to run command and returns
+//! String.
 //!
 //! ## Async control
 //!
@@ -44,10 +58,18 @@
 //! So you will not get a zombi process. You can explicitly detach a process 
 //! from job handler by calling detach() if you want to.
 //!
-//! ```
-//! let command = cmd!("sleep 100");
-//! let job = command.async();
+//! ```test
+//! #[macro_use] extern crate shell;
+//! # use shell::JobSpec;
+//! # use shell::ShellResult;
+//! # fn main() {
+//! # fn body() -> ShellResult {
+//! let job = cmd!("sleep 100").spawn()?;
 //! job.wait();
+//! # Ok(())
+//! # }
+//! # body();
+//! # }
 //! ```
 //!
 //! # Subshell
@@ -57,26 +79,36 @@
 //! that you can call run(), async() as well as a normal external command.
 //!
 //! ```
-//! rushell::subshell(|| {
+//! #[macro_use] extern crate shell;
+//! # use shell::JobSpec;
+//! # fn main() {
+//! shell::subshell(|| {
 //!     // Running in a separated process so changing current directory does
 //!     // not affect a parante process.
-//!     rushell::cd("./hoge")?;
-//!     rushell::set_env("ENV_NAME", "HOGE")?;
+//!     std::env::set_current_dir("./src")?;
+//!     std::env::set_var("ENV_NAME", "HOGE");
+//!     cmd!("echo test").run()?;
 //!     Ok(())
-//! }).run()?;
+//! }).run().unwrap();
+//! # }
 //! ```
 //!
 
-
 extern crate libc;
+extern crate errno;
 
 use std::io::Error;
 use std::process::Command;
+use errno::Errno;
+use errno::errno;
+use std::os::unix::process::CommandExt;
 
+#[derive(Debug)]
 pub enum ShellError {
-    Code(i32),
-    Signal,
-    OtherError(Error)
+    Code(u8),
+    Signaled(i32),
+    OtherError(Error),
+    Errno(&'static str, Errno),
 }
 
 impl std::convert::From<std::io::Error> for ShellError {
@@ -87,25 +119,60 @@ impl std::convert::From<std::io::Error> for ShellError {
 
 pub type ShellResult = std::result::Result<(), ShellError>;
 
-pub fn subshell<F>(_: F) where F: FnOnce() -> JobHandle {
-    let pid = unsafe { libc::fork() };
-    if pid == 0 {
-
+fn check_errno(name: &'static str, 
+               result: libc::c_int) -> Result<libc::c_int, ShellError> {
+    if result != -1 {
+        Ok(result)
+    } else {
+        Err(ShellError::Errno(name, errno()))
     }
 }
 
+trait ShellResultExt {
+    fn code(&self) -> u8;
+}
+
+impl ShellResultExt for ShellResult {
+    fn code(&self) -> u8 {
+        match self {
+            &Ok(_) => 0,
+            &Err(ShellError::Code(code)) => code,
+            &Err(_) => 1
+        }
+    }
+}
+
+pub fn subshell<F>(func: F) ->
+        SubShell where F: FnMut() -> ShellResult + 'static {
+    SubShell(Box::new(func))
+}
+
 /// Something which can be used as a command
-pub trait CommandLike where Self: Sized {
-    fn run(self) -> ShellResult;
-    fn async(self) -> JobHandle;
-    // TODO: fn output(self) -> ShellOutput;
+pub trait JobSpec where Self: Sized {
+    fn exec(self) -> !;
+
+    fn spawn(self) -> Result<JobHandle, ShellError> {
+        unsafe {
+            let pid = check_errno("fork", libc::fork())?;
+            check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
+            if pid == 0 {
+                self.exec()
+                // Process replaced
+            }
+            Ok(JobHandle { pid: pid })
+        }
+    }
+
+    fn run(self) -> ShellResult {
+        self.spawn()?.wait()
+    }
 }
 
 /// Single Command
 pub struct ShellCommand(Command);
 
 impl ShellCommand {
-    fn new(format: &str, args: &[&str]) -> ShellCommand {
+    pub fn new(format: &str, args: &[&str]) -> ShellCommand {
         let mut i = 0;
         let mut vec = format.split(" ").collect::<Vec<_>>();
         for s in vec.iter_mut() {
@@ -120,59 +187,93 @@ impl ShellCommand {
     }
 }
 
-impl CommandLike for ShellCommand {
-    fn run(mut self) -> ShellResult {
-        let status = self.0.status()?;
-        if status.success() {
-            return Ok(());
-        }
-        match status.code() {
-            Some(code) => Err(ShellError::Code(code)),
-            None => Err(ShellError::Signal)
-        }
-    }
-
-    fn async(self) -> JobHandle {
-        unimplemented!();
+impl JobSpec for ShellCommand {
+    fn exec(mut self) -> ! {
+        self.0.exec();
+        std::process::exit(1);
     }
 }
 
+#[macro_export]
 macro_rules! cmd {
-    ($format:expr) => (::ShellCommand::new($format, &[]));
+    ($format:expr) => ($crate::ShellCommand::new($format, &[]));
     ($format:expr, $($arg:expr),+) => 
-        (::ShellCommand::new($format, &[$($arg),+]));
+        ($crate::ShellCommand::new($format, &[$($arg),+]));
 }
 
 
 /// Block
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
-pub struct ShellBlock(Box<FnMut() -> ShellResult + Send + 'static>);
+pub struct SubShell(Box<FnMut() -> ShellResult + 'static>);
 
-impl CommandLike for ShellBlock {
-    fn async(mut self) -> JobHandle {
-        unimplemented!();
-    }
-
-    fn run(self) -> ShellResult {
-        unimplemented!();
+impl JobSpec for SubShell {
+    fn exec(mut self) -> ! {
+        let result = self.0();
+        if let Err(ref err) = result {
+            eprintln!("{:?}", err);
+        }
+        std::process::exit(result.code() as i32);
     }
 }
 
-pub struct JobHandle { pid: usize }
+/// Job which is a process leader.
+pub struct JobHandle { pid: i32 }
 
 impl JobHandle {
-    pub fn kill(self) {
-        unsafe { libc::kill(-(self.pid as i32), libc::SIGINT); }
+    /// Sends a SIGTERM to a process group, then wait a process leader.
+    pub fn terminate(self) -> ShellResult {
+        assert_ne!(self.pid, 0);
+        unsafe {
+            check_errno("kill", libc::kill(-self.pid, libc::SIGTERM))?;
+            match self.wait() {
+                Ok(()) | Err(ShellError::Code(_)) 
+                    | Err(ShellError::Signaled(_)) => Ok(()),
+                err => err
+            }
+        }
+    }
+
+    /// Wait for termination of the process.
+    pub fn wait(mut self) -> ShellResult {
+        self.wait_mut()
+    }
+
+    fn wait_mut(&mut self) -> ShellResult {
+        if self.pid == 0 {
+            return Ok(());
+        }
+        let pid = self.pid;
+        self.pid = 0;
+        loop {
+            unsafe {
+                let mut status: libc::c_int = 0;
+                check_errno("waitpid", libc::waitpid(
+                        pid, &mut status as *mut i32, 0))?;
+
+                if libc::WIFEXITED(status) {
+                    let code = libc::WEXITSTATUS(status);
+                    if code == 0 {
+                        return Ok(());
+                    } else {
+                        return Err(ShellError::Signaled(code));
+                    }
+                } else if libc::WIFSIGNALED(status) {
+                    let signal = libc::WTERMSIG(status);
+                    return Err(ShellError::Signaled(signal));
+                }
+            }
+        }
     }
 }
 
 impl Drop for JobHandle {
     fn drop(&mut self) {
+        self.wait_mut().unwrap();
     }
 }
 
-pub fn watch_for_rerun() -> ShellBlock {
-    ShellBlock(Box::new(move || {
+pub fn watch_for_rerun() -> SubShell {
+    SubShell(Box::new(move || {
         loop {
             let bin = "foo";
             cmd!("inotifywait -e close_write -r src").run()?;
@@ -187,33 +288,32 @@ pub fn watch_for_rerun() -> ShellBlock {
 
 #[cfg(test)]
 mod tests {
-    use ::CommandLike;
+    use ::JobSpec;
 
     #[test]
     fn it_works() {
         fn body() -> ::ShellResult {
-            cmd!("echo Test").run()?;
+            cmd!("test 0 = 0").run()?;
             Ok(())
         }
 
         assert!(body().is_ok());
+    }
 
-        // let shell = Shell::new();
-
-        // ShellBlock(|shell| {
-        //     cmd!("echo hello {}", "hoge").run(shell)?;
-        //     let job = cmd!("hoge hoge").async();
-        //     job.kill();
-        //     Ok(())
-        // }).run(shell)?;
-
-
-        // shell.watch_for_rerun();
-        // shell.block(|shell| {
-        //   shell.run(cmd!("hoge hoge hoge {}", hoge))?;
-        // }).async();
-        // shell.run(cmd!("hoge hoge hoge {}", hoge))?;
-        //
+    #[test]
+    fn terminate_subshel() {
+        let job = ::subshell(|| {
+            println!("Start child");
+            ::subshell(|| {
+                println!("Start sleeping");
+                ::std::thread::sleep(::std::time::Duration::from_secs(10));
+                println!("Stop sleeping");
+                Ok(())
+            }).spawn().unwrap();
+            Ok(())
+        }).spawn().unwrap();
+        ::std::thread::sleep(::std::time::Duration::from_secs(1));
+        job.terminate().unwrap();
     }
 }
 
