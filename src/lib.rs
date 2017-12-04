@@ -167,7 +167,7 @@ pub trait JobSpec where Self: Sized {
                 // Process replaced
             }
             if foreground {
-                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid));
+                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid)).unwrap();
             }
             Ok(JobHandle { pid: pid })
         }
@@ -281,7 +281,6 @@ impl Drop for JobHandle {
         self.wait_mut().unwrap();
     }
 }
-
 
 pub fn try<F>(f: F) -> ShellResult where F: FnOnce() -> ShellResult {
     f()
