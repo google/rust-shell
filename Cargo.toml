@@ -11,6 +11,10 @@ path = "src/pgtest.rs"
 name = "raw_lib_test"
 path = "src/raw_lib_test.rs"
 
+[[bin]]
+name = "terminal_test"
+path = "src/terminal_test.rs"
+
 [dependencies]
 libc = "0.2"
 errno = "*"

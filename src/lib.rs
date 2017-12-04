@@ -147,24 +147,34 @@ pub fn subshell<F>(func: F) ->
     SubShell(Box::new(func))
 }
 
+
 /// Something which can be used as a command
 pub trait JobSpec where Self: Sized {
     fn exec(self) -> !;
 
     fn spawn(self) -> Result<JobHandle, ShellError> {
+        self.spawn_internal(false)
+    }
+
+    fn spawn_internal(self, foreground: bool) -> Result<JobHandle, ShellError> {
         unsafe {
+            let foreground = foreground && libc::tcgetpgrp(0) == libc::getpid();
             let pid = check_errno("fork", libc::fork())?;
+            // Call setpgid in both processes to avoid race. 
             check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
             if pid == 0 {
                 self.exec()
                 // Process replaced
+            }
+            if foreground {
+                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid));
             }
             Ok(JobHandle { pid: pid })
         }
     }
 
     fn run(self) -> ShellResult {
-        self.spawn()?.wait()
+        self.spawn_internal(true)?.wait()
     }
 }
 
