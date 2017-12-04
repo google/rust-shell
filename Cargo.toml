@@ -13,7 +13,7 @@ path = "src/raw_lib_test.rs"
 
 [[bin]]
 name = "terminal_test"
-path = "src/terminal_test.rs"
+path = "tests/terminal_test.rs"
 
 [dependencies]
 libc = "0.2"

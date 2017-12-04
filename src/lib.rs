@@ -282,6 +282,11 @@ impl Drop for JobHandle {
     }
 }
 
+
+pub fn try<F>(f: F) -> ShellResult where F: FnOnce() -> ShellResult {
+    f()
+}
+
 pub fn watch_for_rerun() -> SubShell {
     SubShell(Box::new(move || {
         loop {
@@ -301,29 +306,30 @@ mod tests {
     use ::JobSpec;
 
     #[test]
-    fn it_works() {
-        fn body() -> ::ShellResult {
+    fn test_command_run() {
+        ::try(|| {
             cmd!("test 0 = 0").run()?;
             Ok(())
-        }
-
-        assert!(body().is_ok());
+        }).unwrap();
     }
 
     #[test]
-    fn terminate_subshel() {
-        let job = ::subshell(|| {
-            println!("Start child");
-            ::subshell(|| {
-                println!("Start sleeping");
-                ::std::thread::sleep(::std::time::Duration::from_secs(10));
-                println!("Stop sleeping");
+    fn test_subshell_terminate() {
+        ::try(|| {
+            let job = ::subshell(|| {
+                println!("Start child");
+                ::subshell(|| {
+                    println!("Start sleeping");
+                    ::std::thread::sleep(::std::time::Duration::from_secs(10));
+                    println!("Stop sleeping");
+                    Ok(())
+                }).spawn()?;
                 Ok(())
-            }).spawn().unwrap();
+            }).spawn()?;
+            ::std::thread::sleep(::std::time::Duration::from_secs(1));
+            job.terminate()?;
             Ok(())
-        }).spawn().unwrap();
-        ::std::thread::sleep(::std::time::Duration::from_secs(1));
-        job.terminate().unwrap();
+        }).unwrap();
     }
 }
 
