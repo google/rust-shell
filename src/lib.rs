@@ -94,59 +94,25 @@
 //! ```
 //!
 
+#[macro_use] extern crate lazy_static;
 extern crate libc;
 extern crate errno;
 
-use std::io::Error;
+mod result;
+mod signal_handler;
+
 use std::process::Command;
-use errno::Errno;
-use errno::errno;
 use std::os::unix::process::CommandExt;
-
-#[derive(Debug)]
-pub enum ShellError {
-    Code(u8),
-    Signaled(i32),
-    OtherError(Error),
-    Errno(&'static str, Errno),
-}
-
-impl std::convert::From<std::io::Error> for ShellError {
-    fn from(error: std::io::Error) -> ShellError {
-        ShellError::OtherError(error)
-    }
-}
-
-pub type ShellResult = std::result::Result<(), ShellError>;
-
-fn check_errno(name: &'static str, 
-               result: libc::c_int) -> Result<libc::c_int, ShellError> {
-    if result != -1 {
-        Ok(result)
-    } else {
-        Err(ShellError::Errno(name, errno()))
-    }
-}
-
-trait ShellResultExt {
-    fn code(&self) -> u8;
-}
-
-impl ShellResultExt for ShellResult {
-    fn code(&self) -> u8 {
-        match self {
-            &Ok(_) => 0,
-            &Err(ShellError::Code(code)) => code,
-            &Err(_) => 1
-        }
-    }
-}
+use result::ShellError;
+use result::ShellResult;
+use result::ShellResultExt;
+use result::check_errno;
+use signal_handler::SIGNAL_HANDLER;
 
 pub fn subshell<F>(func: F) ->
         SubShell where F: FnMut() -> ShellResult + 'static {
     SubShell(Box::new(func))
 }
-
 
 /// Something which can be used as a command
 pub trait JobSpec where Self: Sized {
@@ -157,18 +123,23 @@ pub trait JobSpec where Self: Sized {
     }
 
     fn spawn_internal(self, foreground: bool) -> Result<JobHandle, ShellError> {
+        let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
         unsafe {
             let foreground = foreground && libc::tcgetpgrp(0) == libc::getpid();
             let pid = check_errno("fork", libc::fork())?;
             // Call setpgid in both processes to avoid race. 
             check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
+            if foreground {
+                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid)).unwrap();
+                eprintln!("Move to foreground");
+            } else {
+                eprintln!("Not to foreground");
+            }
             if pid == 0 {
                 self.exec()
                 // Process replaced
             }
-            if foreground {
-                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid)).unwrap();
-            }
+            // signal_handler.add_pid(pid);
             Ok(JobHandle { pid: pid })
         }
     }

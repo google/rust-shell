@@ -16,5 +16,6 @@ name = "terminal_test"
 path = "tests/terminal_test.rs"
 
 [dependencies]
-libc = "0.2"
 errno = "*"
+lazy_static = "1.0"
+libc = "0.2"
