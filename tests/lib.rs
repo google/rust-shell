@@ -21,7 +21,41 @@ fn test_panic_in_spawn() {
 }
 
 #[test]
-fn test_spawn_background() {
+fn test_subshell_run() {
+    shell::subshell(|| {
+        unsafe {
+            let foreground_group = 
+                check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
+            let pid = libc::getpid();
+            let pgid = check_errno("getpgid", libc::getpgid(0))?;
+            println!("pid={} pgid={} foreground={}",
+                     pid, pgid, foreground_group);
+            assert_ne!(pid, pgid);
+            assert_eq!(pgid, foreground_group);
+        }
+        Ok(())
+    }).run().unwrap();
+}
+
+#[test]
+fn test_subshell_spawn() {
+    shell::subshell(|| {
+        unsafe {
+            let foreground_group = 
+                check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
+            let pid = libc::getpid();
+            let pgid = check_errno("getpgid", libc::getpgid(0))?;
+            println!("pid={} pgid={} foreground={}",
+                     pid, pgid, foreground_group);
+            assert_ne!(pid, pgid);
+            assert_eq!(pgid, foreground_group);
+        }
+        Ok(())
+    }).spawn().unwrap().wait().unwrap();
+}
+
+#[test]
+fn test_subshell_setpgid_spawn() {
     shell::subshell(|| {
         unsafe {
             let foreground_group = 
@@ -34,23 +68,6 @@ fn test_spawn_background() {
             assert_ne!(pgid, foreground_group);
         }
         Ok(())
-    }).spawn().unwrap().wait().unwrap();
-}
-
-#[test]
-fn test_run_foreground() {
-    shell::subshell(|| {
-        unsafe {
-            let foreground_group = 
-                check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
-            let pid = libc::getpid();
-            let pgid = check_errno("getpgid", libc::getpgid(0))?;
-            println!("pid={} pgid={} foreground={}",
-                     pid, pgid, foreground_group);
-            assert_eq!(pid, pgid);
-            assert_eq!(pgid, foreground_group);
-        }
-        Ok(())
-    }).run().unwrap();
+    }).setpgid().spawn().unwrap().wait().unwrap();
 }
 

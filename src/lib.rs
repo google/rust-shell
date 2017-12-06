@@ -113,31 +113,30 @@ use std::sync::Mutex;
 
 pub fn subshell<F>(func: F) ->
         SubShell where F: Fn() -> ShellResult + 'static {
-    SubShell(Box::new(func))
+    SubShell {
+        func: Box::new(func),
+        setpgid: false
+    }
 }
 
 /// Something which can be used as a command
 pub trait JobSpec where Self: Sized {
     fn exec(self) -> !;
+    fn setpgid(self) -> Self;
+    fn getpgid(&self) -> bool;
 
     fn spawn(self) -> Result<JobHandle, ShellError> {
-        self.spawn_internal(false)
+        let pgid = self.getpgid();
+        self.spawn_internal(pgid)
     }
 
-    fn spawn_internal(self, foreground: bool) -> Result<JobHandle, ShellError> {
+    fn spawn_internal(self, setpgid: bool) -> Result<JobHandle, ShellError> {
         let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
         unsafe {
-            let pgid = check_errno("getpgid", libc::getpgid(0))?;
-            let foreground_id = check_errno(
-                "foreground_id", libc::tcgetpgrp(0))?;
-            let foreground = foreground && foreground_id == pgid;
             let pid = check_errno("fork", libc::fork())?;
             // Call setpgid in both processes to avoid race. 
-            check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
-            if foreground {
-                let pgid = libc::getpgid(pid);
-                println!("set foregorund {} => {}", pid, pgid);
-                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pgid)).unwrap();
+            if setpgid {
+                check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
             }
             if pid == 0 {
                 let mutex = Mutex::new(self);
@@ -151,17 +150,21 @@ pub trait JobSpec where Self: Sized {
                 libc::kill(pid, libc::SIGCONT);
             }
             // signal_handler.add_pid(pid);
-            Ok(JobHandle { pid: pid, bollow_foreground: foreground })
+            Ok(JobHandle { pid: pid, setpgid: setpgid })
         }
     }
 
     fn run(self) -> ShellResult {
-        self.spawn_internal(true)?.wait()
+        let pgid = self.getpgid();
+        self.spawn_internal(pgid)?.wait()
     }
 }
 
 /// Single Command
-pub struct ShellCommand(Command);
+pub struct ShellCommand {
+    command: Command,
+    setpgid: bool
+}
 
 impl ShellCommand {
     pub fn new(format: &str, args: &[&str]) -> ShellCommand {
@@ -175,14 +178,26 @@ impl ShellCommand {
         }
         let mut command = Command::new(vec[0]);
         command.args(&vec.as_slice()[1..]);
-        ShellCommand(command)
+        ShellCommand {
+            command: command,
+            setpgid: false
+        }
     }
 }
 
 impl JobSpec for ShellCommand {
     fn exec(mut self) -> ! {
-        self.0.exec();
+        self.command.exec();
         std::process::exit(1);
+    }
+
+    fn setpgid(mut self) -> Self {
+        self.setpgid = true;
+        self
+    }
+
+    fn getpgid(&self) -> bool {
+        return self.setpgid;
     }
 }
 
@@ -196,24 +211,41 @@ macro_rules! cmd {
 
 /// Block
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
-pub struct SubShell(Box<Fn() -> ShellResult + 'static>);
+pub struct SubShell {
+    func: Box<Fn() -> ShellResult + 'static>,
+    setpgid: bool
+}
 
 impl JobSpec for SubShell {
     fn exec(mut self) -> ! {
-        self.0().unwrap();
+        (self.func)().unwrap();
         std::process::exit(0);
+    }
+
+    fn setpgid(mut self) -> Self {
+        self.setpgid = true;
+        self
+    }
+
+    fn getpgid(&self) -> bool {
+        return self.setpgid;
     }
 }
 
 /// Job which is a process leader.
-pub struct JobHandle { pid: i32, bollow_foreground: bool }
+pub struct JobHandle { pid: i32, setpgid: bool }
 
 impl JobHandle {
     /// Sends a SIGTERM to a process group, then wait a process leader.
     pub fn terminate(self) -> ShellResult {
         assert_ne!(self.pid, 0);
         unsafe {
-            check_errno("kill", libc::kill(-self.pid, libc::SIGTERM))?;
+            let pid = if self.setpgid {
+                -self.pid
+            } else {
+                self.pid
+            };
+            check_errno("kill", libc::kill(pid, libc::SIGTERM))?;
             match self.wait() {
                 Ok(()) | Err(ShellError::Code(_)) 
                     | Err(ShellError::Signaled(_)) => Ok(()),
@@ -263,20 +295,6 @@ impl Drop for JobHandle {
 
 pub fn try<F>(f: F) -> ShellResult where F: FnOnce() -> ShellResult {
     f()
-}
-
-pub fn watch_for_rerun() -> SubShell {
-    SubShell(Box::new(move || {
-        loop {
-            let bin = "foo";
-            cmd!("inotifywait -e close_write -r src").run()?;
-            if cmd!("cargo build {}", bin).run().is_ok()  {
-                break;
-            }
-        }
-
-        Ok(())
-    }))
 }
 
 #[cfg(test)]

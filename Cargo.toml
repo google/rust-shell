@@ -3,18 +3,6 @@ name = "shell"
 version = "0.1.0"
 authors = ["Daichi Hirono <hidachinoiro@gmail.com>"]
 
-[[bin]]
-name = "pgtest"
-path = "src/pgtest.rs"
-
-[[bin]]
-name = "kill_test"
-path = "tests/kill_test.rs"
-
-[[bin]]
-name = "terminal_test"
-path = "tests/terminal_test.rs"
-
 [dependencies]
 errno = "*"
 lazy_static = "1.0"
