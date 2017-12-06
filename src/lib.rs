@@ -101,16 +101,18 @@ extern crate errno;
 mod result;
 mod signal_handler;
 
-use std::process::Command;
-use std::os::unix::process::CommandExt;
+pub use result::check_errno;
 use result::ShellError;
 use result::ShellResult;
 use result::ShellResultExt;
-use result::check_errno;
 use signal_handler::SIGNAL_HANDLER;
+use std::os::unix::process::CommandExt;
+use std::panic;
+use std::process::Command;
+use std::sync::Mutex;
 
 pub fn subshell<F>(func: F) ->
-        SubShell where F: FnMut() -> ShellResult + 'static {
+        SubShell where F: Fn() -> ShellResult + 'static {
     SubShell(Box::new(func))
 }
 
@@ -125,22 +127,31 @@ pub trait JobSpec where Self: Sized {
     fn spawn_internal(self, foreground: bool) -> Result<JobHandle, ShellError> {
         let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
         unsafe {
-            let foreground = foreground && libc::tcgetpgrp(0) == libc::getpid();
+            let pgid = check_errno("getpgid", libc::getpgid(0))?;
+            let foreground_id = check_errno(
+                "foreground_id", libc::tcgetpgrp(0))?;
+            let foreground = foreground && foreground_id == pgid;
             let pid = check_errno("fork", libc::fork())?;
             // Call setpgid in both processes to avoid race. 
             check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
             if foreground {
-                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pid)).unwrap();
-                eprintln!("Move to foreground");
-            } else {
-                eprintln!("Not to foreground");
+                let pgid = libc::getpgid(pid);
+                println!("set foregorund {} => {}", pid, pgid);
+                check_errno("tcsetpgrp", libc::tcsetpgrp(0, pgid)).unwrap();
             }
             if pid == 0 {
-                self.exec()
+                let mutex = Mutex::new(self);
+                panic::catch_unwind(move || {
+                    let lock = mutex.into_inner().unwrap();
+                    lock.exec()
+                }).is_ok();
+                std::process::exit(101);
                 // Process replaced
+            } else {
+                libc::kill(pid, libc::SIGCONT);
             }
             // signal_handler.add_pid(pid);
-            Ok(JobHandle { pid: pid })
+            Ok(JobHandle { pid: pid, bollow_foreground: foreground })
         }
     }
 
@@ -185,20 +196,17 @@ macro_rules! cmd {
 
 /// Block
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
-pub struct SubShell(Box<FnMut() -> ShellResult + 'static>);
+pub struct SubShell(Box<Fn() -> ShellResult + 'static>);
 
 impl JobSpec for SubShell {
     fn exec(mut self) -> ! {
-        let result = self.0();
-        if let Err(ref err) = result {
-            eprintln!("{:?}", err);
-        }
-        std::process::exit(result.code() as i32);
+        self.0().unwrap();
+        std::process::exit(0);
     }
 }
 
 /// Job which is a process leader.
-pub struct JobHandle { pid: i32 }
+pub struct JobHandle { pid: i32, bollow_foreground: bool }
 
 impl JobHandle {
     /// Sends a SIGTERM to a process group, then wait a process leader.
@@ -236,7 +244,7 @@ impl JobHandle {
                     if code == 0 {
                         return Ok(());
                     } else {
-                        return Err(ShellError::Signaled(code));
+                        return Err(ShellError::Code(code as u8));
                     }
                 } else if libc::WIFSIGNALED(status) {
                     let signal = libc::WTERMSIG(status);

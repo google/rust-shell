@@ -8,8 +8,8 @@ name = "pgtest"
 path = "src/pgtest.rs"
 
 [[bin]]
-name = "raw_lib_test"
-path = "src/raw_lib_test.rs"
+name = "kill_test"
+path = "tests/kill_test.rs"
 
 [[bin]]
 name = "terminal_test"
