@@ -7,7 +7,7 @@ use ::nom::IResult;
 fn token_char(ch: char) -> bool {
     match ch {
         ch if ch as u8 <= 32 || 127 <= ch as u8 => false,
-        '"' | '\'' | '>' | '<' | '|' | ';' | '{' | '}' | ' ' => false,
+        '"' | '\'' | '>' | '<' | '|' | ';' | '{' | '}' => false,
         _ => true,
     }
 }
