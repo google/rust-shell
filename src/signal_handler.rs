@@ -4,15 +4,17 @@ use ::std::sync::Arc;
 use ::std::sync::Mutex;
 
 pub struct SignalHandler {
-    pids: Vec<c_int>
+    pids: Vec<c_int>,
+    
 }
 
 extern fn handle_signal(signal: c_int) {
     ::std::thread::spawn(move || {
-        match SIGNAL_HANDLER.lock() {
-            Ok(signal_handler) => signal_handler.kill_all(signal),
-            Err(_) => ::std::process::exit(128 + signal),
+        let lock = SIGNAL_HANDLER.lock();
+        if let Ok(mut signal_handler) = lock {
+            signal_handler.kill_all(signal);
         }
+        ::std::process::exit(128 + signal);
     });
 }
 
@@ -24,29 +26,33 @@ impl SignalHandler {
         if result == ::libc::SIG_ERR {
             panic!("signal failed");
         }
+        let result = unsafe {
+            ::libc::signal(::libc::SIGTERM, handle_signal as usize)
+        };
+        if result == ::libc::SIG_ERR {
+            panic!("signal failed");
+        }
         SignalHandler {
             pids: Vec::new()
         }
     }
 
-    pub fn kill_all(&self, signal: c_int) -> ! {
+    pub fn kill_all(&mut self, signal: c_int) {
         unsafe {
             for pid in &self.pids {
                 ::result::check_errno(
                     "kill", ::libc::kill(*pid, signal)).print_error();
             }
-            for pid in &self.pids {
-                let mut status: i32 = 0;
-                ::result::check_errno(
-                    "waitpid", ::libc::waitpid(
-                        pid.abs(), &mut status, 0)).print_error();
-            }
         }
-        ::std::process::exit(128 + signal)
+        self.clear();
     }
 
     pub fn add_pid(&mut self, pid: c_int) {
         self.pids.push(pid);
+    }
+
+    pub fn clear(&mut self) {
+        self.pids.clear();
     }
 }
 

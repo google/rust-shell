@@ -131,13 +131,21 @@ pub trait JobSpec where Self: Sized {
     }
 
     fn spawn_internal(self, setpgid: bool) -> Result<JobHandle, ShellError> {
-        let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
-        unsafe {
+        let pid = unsafe {
+            let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
             let pid = check_errno("fork", libc::fork())?;
             // Call setpgid in both processes to avoid race. 
             if setpgid {
                 check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
             }
+            if pid != 0 {
+                signal_handler.add_pid(pid);
+            } else {
+                signal_handler.clear();
+            }
+            pid
+        };
+        unsafe {
             if pid == 0 {
                 let mutex = Mutex::new(self);
                 panic::catch_unwind(move || {
@@ -149,9 +157,9 @@ pub trait JobSpec where Self: Sized {
             } else {
                 libc::kill(pid, libc::SIGCONT);
             }
-            // signal_handler.add_pid(pid);
-            Ok(JobHandle { pid: pid, setpgid: setpgid })
         }
+        // signal_handler.add_pid(pid);
+        Ok(JobHandle { pid: pid, setpgid: setpgid })
     }
 
     fn run(self) -> ShellResult {
@@ -313,11 +321,8 @@ mod tests {
     fn test_subshell_terminate() {
         ::try(|| {
             let job = ::subshell(|| {
-                println!("Start child");
                 ::subshell(|| {
-                    println!("Start sleeping");
                     ::std::thread::sleep(::std::time::Duration::from_secs(10));
-                    println!("Stop sleeping");
                     Ok(())
                 }).spawn()?;
                 Ok(())

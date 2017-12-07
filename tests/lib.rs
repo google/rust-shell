@@ -28,8 +28,6 @@ fn test_subshell_run() {
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
-            println!("pid={} pgid={} foreground={}",
-                     pid, pgid, foreground_group);
             assert_ne!(pid, pgid);
             assert_eq!(pgid, foreground_group);
         }
@@ -45,8 +43,6 @@ fn test_subshell_spawn() {
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
-            println!("pid={} pgid={} foreground={}",
-                     pid, pgid, foreground_group);
             assert_ne!(pid, pgid);
             assert_eq!(pgid, foreground_group);
         }
@@ -62,12 +58,34 @@ fn test_subshell_setpgid_spawn() {
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
-            println!("pid={} pgid={} foreground={}",
-                     pid, pgid, foreground_group);
             assert_eq!(pid, pgid);
             assert_ne!(pgid, foreground_group);
         }
         Ok(())
     }).setpgid().spawn().unwrap().wait().unwrap();
+}
+
+#[test]
+fn test_subshell_kill() {
+    let job = shell::subshell(|| {
+        cmd!("sleep 3").run()
+    }).spawn().unwrap();
+    cmd!("sleep 1").run().unwrap();
+    // Stop outputting process group.
+    assert!(cmd!("pgrep sleep").run().is_ok());
+    job.terminate().unwrap();
+    assert!(cmd!("pgrep sleep").run().is_err());
+}
+
+#[test]
+fn test_subshell_setsid_kill() {
+    let job = shell::subshell(|| {
+        cmd!("sleep 3").run()
+    }).setpgid().spawn().unwrap();
+    cmd!("sleep 1").run().unwrap();
+    // Stop outputting process group.
+    assert!(cmd!("pgrep sleep").run().is_ok());
+    job.terminate().unwrap();
+    assert!(cmd!("pgrep sleep").run().is_err());
 }
 
