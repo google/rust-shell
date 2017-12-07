@@ -11,3 +11,8 @@ path = "src/runtest.rs"
 errno = "*"
 lazy_static = "1.0"
 libc = "0.2"
+regex = "0.2"
+
+[dependencies.nom]
+version = "^3.2"
+features = ["regexp"]

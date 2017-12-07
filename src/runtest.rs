@@ -3,5 +3,5 @@
 use shell::JobSpec;
 
 fn main() {
-    cmd!("cargo test --tests -- --test-threads=1").run().unwrap();
+    cmd!("cargo test -- --test-threads=1").run().unwrap();
 }

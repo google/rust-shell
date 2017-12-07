@@ -95,20 +95,20 @@
 //!
 
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate nom;
 extern crate libc;
 extern crate errno;
 
-pub mod result;
 mod signal_handler;
+#[macro_use] pub mod command;
+pub mod result;
 
 pub use result::check_errno;
 use result::ShellError;
 use result::ShellResult;
 use result::ShellResultExt;
 use signal_handler::SIGNAL_HANDLER;
-use std::os::unix::process::CommandExt;
 use std::panic;
-use std::process::Command;
 use std::sync::Mutex;
 
 pub fn subshell<F>(func: F) ->
@@ -167,55 +167,6 @@ pub trait JobSpec where Self: Sized {
         self.spawn_internal(pgid)?.wait()
     }
 }
-
-/// Single Command
-pub struct ShellCommand {
-    command: Command,
-    setpgid: bool
-}
-
-impl ShellCommand {
-    pub fn new(format: &str, args: &[&str]) -> ShellCommand {
-        let mut i = 0;
-        let mut vec = format.split(" ").collect::<Vec<_>>();
-        for s in vec.iter_mut() {
-            if *s == "{}" {
-                *s = args[i];
-                i += 1;
-            }
-        }
-        let mut command = Command::new(vec[0]);
-        command.args(&vec.as_slice()[1..]);
-        ShellCommand {
-            command: command,
-            setpgid: false
-        }
-    }
-}
-
-impl JobSpec for ShellCommand {
-    fn exec(mut self) -> ! {
-        self.command.exec();
-        std::process::exit(1);
-    }
-
-    fn setpgid(mut self) -> Self {
-        self.setpgid = true;
-        self
-    }
-
-    fn getpgid(&self) -> bool {
-        return self.setpgid;
-    }
-}
-
-#[macro_export]
-macro_rules! cmd {
-    ($format:expr) => ($crate::ShellCommand::new($format, &[]));
-    ($format:expr, $($arg:expr),+) => 
-        ($crate::ShellCommand::new($format, &[$($arg),+]));
-}
-
 
 /// Block
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
