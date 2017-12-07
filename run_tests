@@ -1,3 +1,0 @@
-#!/bin/bash
-# cargo test --tests -- --nocapture --test-threads=1
-cargo test --tests -- --test-threads=1
