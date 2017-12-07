@@ -33,7 +33,7 @@
 //!
 //! ```
 //! #[macro_use] extern crate shell;
-//! # use shell::ShellResult;
+//! # use shell::result::ShellResult;
 //! # use shell::JobSpec;
 //! fn my_shell_script() -> ShellResult {
 //!   cmd!("echo test").run()?;
@@ -61,7 +61,7 @@
 //! ```test
 //! #[macro_use] extern crate shell;
 //! # use shell::JobSpec;
-//! # use shell::ShellResult;
+//! # use shell::result::ShellResult;
 //! # fn main() {
 //! # fn body() -> ShellResult {
 //! let job = cmd!("sleep 100").spawn()?;
