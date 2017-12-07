@@ -1,22 +1,33 @@
 extern crate errno;
 extern crate libc;
 
-use errno::errno;
 use errno::Errno;
+use errno::errno;
+use std::convert::From;
+use std::env;
+use std::io;
 
 #[derive(Debug)]
 pub enum ShellError {
     Code(u8),
     Signaled(i32),
-    OtherError(::std::io::Error),
+    IoError(io::Error),
+    VarError(env::VarError),
     Errno(&'static str, Errno),
 }
 
-impl ::std::convert::From<::std::io::Error> for ShellError {
-    fn from(error: ::std::io::Error) -> ShellError {
-        ShellError::OtherError(error)
+impl From<io::Error> for ShellError {
+    fn from(error: io::Error) -> ShellError {
+        ShellError::IoError(error)
     }
 }
+
+impl From<env::VarError> for ShellError {
+    fn from(error: env::VarError) -> ShellError {
+        ShellError::VarError(error)
+    }
+}
+
 pub type ShellResult = ::std::result::Result<(), ShellError>;
 
 pub fn check_errno(name: &'static str, 
