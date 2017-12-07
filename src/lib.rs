@@ -98,7 +98,7 @@
 extern crate libc;
 extern crate errno;
 
-mod result;
+pub mod result;
 mod signal_handler;
 
 pub use result::check_errno;
