@@ -3,5 +3,8 @@
 use shell::JobSpec;
 
 fn main() {
-    cmd!("cargo test -- --test-threads=1").run().unwrap();
+    loop {
+        cmd!("cargo test -- --test-threads=1").run().unwrap_or_default();
+        cmd!("inotifywait -e close_write -r .").run().unwrap();
+    }
 }

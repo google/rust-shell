@@ -89,3 +89,14 @@ fn test_subshell_setsid_kill() {
     assert!(cmd!("pgrep sleep").run().is_err());
 }
 
+#[test]
+fn test_kill_all_after_wait() {
+    let job = shell::subshell(|| {
+        cmd!("sleep 1").run()?;
+        cmd!("sleep 5").run()?;
+        Ok(())
+    }).spawn().unwrap();
+    cmd!("sleep 2").run().unwrap();
+    job.terminate().unwrap();
+}
+
