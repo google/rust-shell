@@ -1,9 +1,8 @@
-use ::JobSpec;
-use ::JobSpec2;
+use ::Executable;
+use ::job_spec::JobSpec2;
+use ::nom::IResult;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
-use std;
-use ::nom::IResult;
 
 fn token_char(ch: char) -> bool {
     match ch {
@@ -24,7 +23,13 @@ named!(command_token<&str, &str>,
 named!(command< &str, Vec<&str> >,
        terminated!(ws!(many1!(command_token)), eof!()));
 
-pub fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
+impl Executable for Command {
+    fn exec(&mut self) -> ! {
+        panic!("Failed to execute command {:?}", CommandExt::exec(self));
+    }
+}
+
+fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
     let tokens = match command(format) {
         IResult::Done(_, result) => result,
         IResult::Error(error) => panic!("Error {:?}", error),
@@ -41,40 +46,6 @@ pub fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
         }
     }
     new_args
-}
-
-/// Single Command
-pub struct ShellCommand {
-    command: Command,
-    setpgid: bool
-}
-
-impl ShellCommand {
-    pub fn new(format: &str, args: &[&str]) -> ShellCommand {
-        let vec = parse_cmd(format, args);
-        let mut command = Command::new(vec[0]);
-        command.args(&vec.as_slice()[1..]);
-        ShellCommand {
-            command: command,
-            setpgid: false
-        }
-    }
-}
-
-impl JobSpec for ShellCommand {
-    fn exec(mut self) -> ! {
-        self.command.exec();
-        std::process::exit(1);
-    }
-
-    fn setpgid(mut self) -> Self {
-        self.setpgid = true;
-        self
-    }
-
-    fn getpgid(&self) -> bool {
-        return self.setpgid;
-    }
 }
 
 pub fn new_command(format: &str, args: &[&str]) -> JobSpec2 {

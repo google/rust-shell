@@ -1,8 +1,33 @@
 #[macro_use] extern crate shell;
 extern crate libc;
 
-use shell::JobSpec;
 use shell::check_errno;
+use shell::try;
+use shell::subshell;
+
+#[test]
+fn test_command_run() {
+    ::try(|| {
+        cmd!("test 0 = 0").run()?;
+        Ok(())
+    }).unwrap();
+}
+
+#[test]
+fn test_subshell_terminate() {
+    try(|| {
+        let job = subshell(|| {
+            subshell(|| {
+                ::std::thread::sleep(::std::time::Duration::from_secs(10));
+                Ok(())
+            }).spawn()?;
+            Ok(())
+        }).spawn()?;
+        std::thread::sleep(::std::time::Duration::from_secs(1));
+        job.terminate()?;
+        Ok(())
+    }).unwrap();
+}
 
 #[test]
 fn test_panic_in_run() {
@@ -62,7 +87,7 @@ fn test_subshell_setpgid_spawn() {
             assert_ne!(pgid, foreground_group);
         }
         Ok(())
-    }).setpgid().spawn().unwrap().wait().unwrap();
+    }).process_group().spawn().unwrap().wait().unwrap();
 }
 
 #[test]
@@ -81,7 +106,7 @@ fn test_subshell_kill() {
 fn test_subshell_setsid_kill() {
     let job = shell::subshell(|| {
         cmd!("sleep 3").run()
-    }).setpgid().spawn().unwrap();
+    }).process_group().spawn().unwrap();
     cmd!("sleep 1").run().unwrap();
     // Stop outputting process group.
     assert!(cmd!("pgrep sleep").run().is_ok());
