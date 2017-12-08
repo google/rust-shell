@@ -103,7 +103,6 @@ mod signal_handler;
 pub mod result;
 
 pub use result::check_errno;
-use result::ShellError;
 use result::ShellResult;
 use ::job_spec::JobSpec;
 

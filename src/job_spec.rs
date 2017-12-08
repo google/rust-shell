@@ -1,16 +1,10 @@
 use ::Executable;
-use ::libc;
 use job_handle::JobHandle;
-use result::ShellError;
 use result::ShellResult;
-use result::check_errno;
-use signal_handler::SIGNAL_HANDLER;
-use std::mem;
-use std::panic;
+use result::ShellError;
 use std::path::Path;
-use std::process::Command;
-use std::process;
-use std::sync::Mutex;
+use ::signal_handler::SignalHandler;
+use std::mem;
 
 pub struct JobSpec {
     executable: Option<Box<Executable>>,
@@ -30,11 +24,11 @@ impl JobSpec {
         self
     }
 
-    pub fn current_dir(mut self, path: &Path) -> Self {
+    pub fn current_dir(self, _path: &Path) -> Self {
         unimplemented!()
     }
 
-    pub fn env(mut self, name: &str, value: &str) -> Self {
+    pub fn env(self, _name: &str, _value: &str) -> Self {
         unimplemented!()
     }
 
@@ -53,36 +47,7 @@ impl JobSpec {
                 return Err(ShellError::InvalidExecutable);
             }
         };
-        let pid = unsafe {
-            let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
-            let pid = check_errno("fork", libc::fork())?;
-            // Call setpgid in both processes to avoid race. 
-            if self.process_group {
-                check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
-            }
-            if pid != 0 {
-                signal_handler.add_pid(pid);
-            } else {
-                signal_handler.clear();
-            }
-            pid
-        };
-        unsafe {
-            if pid == 0 {
-                let mutex = Mutex::new(executable);
-                panic::catch_unwind(move || {
-                    let mut lock = mutex.lock().unwrap();
-                    lock.exec()
-                }).is_ok();
-                // The control reaches here only when the process was paniced.
-                process::exit(101);
-            } else {
-                if self.process_group {
-                    libc::kill(pid, libc::SIGCONT);
-                }
-            }
-        }
-        Ok(JobHandle { pid: pid, setpgid: self.process_group })
+        SignalHandler::fork(executable, self.process_group)
     }
 }
 
@@ -97,6 +62,7 @@ impl Drop for JobSpec {
 
 #[test]
 fn test_job_spec_2() {
+    use std::process::Command;
     let mut command = Command::new("echo");
     command.arg("The command was run");
     JobSpec::new(command).process_group();
