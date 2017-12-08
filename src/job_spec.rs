@@ -12,14 +12,14 @@ use std::process::Command;
 use std::process;
 use std::sync::Mutex;
 
-pub struct JobSpec2 {
+pub struct JobSpec {
     executable: Option<Box<Executable>>,
     process_group: bool
 }
 
-impl JobSpec2 {
-    pub fn new<T>(executable: T) -> JobSpec2 where T : Executable + 'static {
-        JobSpec2 {
+impl JobSpec {
+    pub fn new<T>(executable: T) -> JobSpec where T : Executable + 'static {
+        JobSpec {
             executable: Some(Box::new(executable)),
             process_group: false
         }
@@ -86,7 +86,7 @@ impl JobSpec2 {
     }
 }
 
-impl Drop for JobSpec2 {
+impl Drop for JobSpec {
     fn drop(&mut self) {
         if self.executable.is_none() {
             return;
@@ -99,5 +99,5 @@ impl Drop for JobSpec2 {
 fn test_job_spec_2() {
     let mut command = Command::new("echo");
     command.arg("The command was run");
-    JobSpec2::new(command).process_group();
+    JobSpec::new(command).process_group();
 }

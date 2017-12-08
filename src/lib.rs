@@ -105,14 +105,14 @@ pub mod result;
 pub use result::check_errno;
 use result::ShellError;
 use result::ShellResult;
-use ::job_spec::JobSpec2;
+use ::job_spec::JobSpec;
 
 pub trait Executable {
     fn exec(&mut self) -> !;
 }
 
-pub fn subshell<F>(func: F) -> JobSpec2 where F: Fn() -> ShellResult + 'static {
-    JobSpec2::new(SubShell {
+pub fn subshell<F>(func: F) -> JobSpec where F: Fn() -> ShellResult + 'static {
+    JobSpec::new(SubShell {
         func: Box::new(func)
     })
 }

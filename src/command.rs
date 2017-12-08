@@ -1,5 +1,5 @@
 use ::Executable;
-use ::job_spec::JobSpec2;
+use ::job_spec::JobSpec;
 use ::nom::IResult;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -48,13 +48,13 @@ fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
     new_args
 }
 
-pub fn new_command(format: &str, args: &[&str]) -> JobSpec2 {
+pub fn new_command(format: &str, args: &[&str]) -> JobSpec {
     let vec = parse_cmd(format, args);
     let mut command = Command::new(vec[0]);
     if vec.len() > 1 {
         command.args(&vec[1..]);
     }
-    JobSpec2::new(command)
+    JobSpec::new(command)
 }
 
 #[macro_export]
