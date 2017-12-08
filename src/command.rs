@@ -1,4 +1,5 @@
 use ::JobSpec;
+use ::JobSpec2;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 use std;
@@ -23,12 +24,23 @@ named!(command_token<&str, &str>,
 named!(command< &str, Vec<&str> >,
        terminated!(ws!(many1!(command_token)), eof!()));
 
-pub fn parse_cmd(text: &str) -> Vec<&str> {
-    match command(text) {
+pub fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
+    let tokens = match command(format) {
         IResult::Done(_, result) => result,
         IResult::Error(error) => panic!("Error {:?}", error),
         IResult::Incomplete(needed) => panic!("Needed {:?}", needed)
+    };
+    let mut new_args: Vec<&str> = Vec::new();
+    let mut i = 0;
+    for arg in &tokens {
+        if *arg == "{}" {
+            new_args.push(args[i]);
+            i += 1;
+        } else {
+            new_args.push(arg);
+        }
     }
+    new_args
 }
 
 /// Single Command
@@ -39,7 +51,7 @@ pub struct ShellCommand {
 
 impl ShellCommand {
     pub fn new(format: &str, args: &[&str]) -> ShellCommand {
-        let vec = parse_cmd(format);
+        let vec = parse_cmd(format, args);
         let mut command = Command::new(vec[0]);
         command.args(&vec.as_slice()[1..]);
         ShellCommand {
@@ -65,21 +77,31 @@ impl JobSpec for ShellCommand {
     }
 }
 
+pub fn new_command(format: &str, args: &[&str]) -> JobSpec2 {
+    let vec = parse_cmd(format, args);
+    let mut command = Command::new(vec[0]);
+    if vec.len() > 1 {
+        command.args(&vec[1..]);
+    }
+    JobSpec2::new(command)
+}
+
 #[macro_export]
 macro_rules! cmd {
-    ($format:expr) => ($crate::command::ShellCommand::new($format, &[]));
+    ($format:expr) => ($crate::command::new_command($format, &[]));
     ($format:expr, $($arg:expr),+) => 
-        ($crate::command::ShellCommand::new($format, &[$($arg),+]));
+        ($crate::command::new_command($format, &[$($arg),+]));
 }
 
 #[test]
 fn test_parse_cmd() {
     let tokens = parse_cmd(r#"cmd 1 2 
                               3 "
-  4""#);
+  4" {}"#, &["5"]);
     assert_eq!("cmd", tokens[0]);
     assert_eq!("1", tokens[1]);
     assert_eq!("2", tokens[2]);
     assert_eq!("3", tokens[3]);
     assert_eq!("\n  4", tokens[4]);
+    assert_eq!("5", tokens[5]);
 }

@@ -14,6 +14,7 @@ pub enum ShellError {
     IoError(io::Error),
     VarError(env::VarError),
     Errno(&'static str, Errno),
+    InvalidExecutable,
 }
 
 impl From<io::Error> for ShellError {
