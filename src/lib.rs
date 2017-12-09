@@ -97,8 +97,9 @@ extern crate libc;
 extern crate errno;
 
 #[macro_use] pub mod command;
-mod job_spec;
 mod job_handle;
+mod job_spec;
+mod pipe_capture;
 mod signal_handler;
 pub mod result;
 

@@ -4,18 +4,19 @@ use result::ShellError;
 use result::ShellResult;
 use ::signal_handler::SignalHandler;
 use ::std::mem;
+use pipe_capture::PipeCapture;
 
 struct JobHandleData {
     pid: c_int,
     /// out for capture
-    out: Option<c_int>
+    out: Option<PipeCapture>
 }
 
 /// Job which is a process leader.
 pub struct JobHandle(Option<JobHandleData>);
 
 impl JobHandle {
-    pub fn new(pid: c_int, out: Option<c_int>) -> JobHandle {
+    pub fn new(pid: c_int, out: Option<PipeCapture>) -> JobHandle {
         JobHandle(Some(JobHandleData {
             pid: pid,
             out: out

@@ -14,6 +14,7 @@ use ::std::process;
 use ::std::sync::Arc;
 use ::std::sync::RwLock;
 use ::std::sync::Mutex;
+use ::pipe_capture::PipeCapture;
 
 #[derive(Debug)]
 struct ChildProcessData {
@@ -136,9 +137,10 @@ impl SignalHandler {
                 stdin: Redirect, stdout: Redirect, stderr: Redirect)
             -> Result<JobHandle, ShellError> {
         unsafe {
-            let mut pipe = [0 as c_int, 2];
-            libc::pipe(&mut pipe[0] as *mut c_int);
-
+            let mut stdout = match stdout {
+                Redirect::Capture => Some(PipeCapture::new()?),
+                _ => None
+            };
             let pid = {
                 let mut lock = SIGNAL_HANDLER.lock().unwrap();
                 let pid = check_errno("fork", libc::fork())?;
@@ -149,18 +151,10 @@ impl SignalHandler {
                         child.set_has_group(true);
                     }
                     lock.children.insert(pid, Arc::new(RwLock::new(child)));
-                    let out = match stdout {
-                        Redirect::Capture => {
-                            libc::close(pipe[1]);
-                            Some(pipe[0])
-                        }
-                        _ => {
-                            libc::close(pipe[0]);
-                            libc::close(pipe[1]);
-                            None
-                        }
-                    };
-                    return Ok(JobHandle::new(pid, out));
+                    if let Some(capture) = stdout.as_mut() {
+                        capture.start_reading();
+                    }
+                    return Ok(JobHandle::new(pid, stdout));
                 } else {
                     for child in lock.children.drain() {
                         // After fork ChildProcess should not track parent
@@ -168,21 +162,15 @@ impl SignalHandler {
                         // them leaked.
                         mem::forget(child.1);
                     }
+                    match stdout {
+                        Some(stdout) => stdout.start_writing()?,
+                        None => ()
+                    }
                 }
                 pid
             };
             let mutex = Mutex::new(executor);
             let result = panic::catch_unwind(move || { if process_group {
-                    match stdout {
-                        Redirect::Capture => {
-                            libc::close(pipe[0]);
-                            libc::dup2(1, pipe[1]);
-                        }
-                        _ => {
-                            libc::close(pipe[0]);
-                            libc::close(pipe[1]);
-                        }
-                    }
                     check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
                 }
                 mutex.lock().unwrap().exec();
