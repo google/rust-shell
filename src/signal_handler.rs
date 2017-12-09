@@ -36,10 +36,6 @@ impl ChildProcess {
         self.0.as_mut().unwrap().has_group = value;
     }
 
-    fn forget(mut self) {
-        self.0 = None;
-    }
-
     fn signal(&self, sig: c_int) -> ShellResult {
         let data = self.0.as_ref().unwrap();
         let kill_pid = if data.has_group {
@@ -66,7 +62,6 @@ impl ChildProcess {
         Ok(())
     }
 
-    /// Do not invoke it from the outside
     fn wait_mut(&mut self) -> ShellResult {
         let data = mem::replace(&mut self.0, None).unwrap();
         let pid = data.pid;
@@ -88,10 +83,6 @@ impl ChildProcess {
                 }
             }
         }
-    }
-
-    fn wait(mut self) -> ShellResult {
-        self.wait_mut()
     }
 }
 
@@ -145,6 +136,9 @@ impl SignalHandler {
                 stdin: Redirect, stdout: Redirect, stderr: Redirect)
             -> Result<JobHandle, ShellError> {
         unsafe {
+            let mut pipe = [0 as c_int, 2];
+            libc::pipe(&mut pipe[0] as *mut c_int);
+
             let pid = {
                 let mut lock = SIGNAL_HANDLER.lock().unwrap();
                 let pid = check_errno("fork", libc::fork())?;
@@ -155,7 +149,18 @@ impl SignalHandler {
                         child.set_has_group(true);
                     }
                     lock.children.insert(pid, Arc::new(RwLock::new(child)));
-                    return Ok(JobHandle::new(pid));
+                    let out = match stdout {
+                        Redirect::Capture => {
+                            libc::close(pipe[1]);
+                            Some(pipe[0])
+                        }
+                        _ => {
+                            libc::close(pipe[0]);
+                            libc::close(pipe[1]);
+                            None
+                        }
+                    };
+                    return Ok(JobHandle::new(pid, out));
                 } else {
                     for child in lock.children.drain() {
                         // After fork ChildProcess should not track parent
@@ -168,6 +173,16 @@ impl SignalHandler {
             };
             let mutex = Mutex::new(executor);
             let result = panic::catch_unwind(move || { if process_group {
+                    match stdout {
+                        Redirect::Capture => {
+                            libc::close(pipe[0]);
+                            libc::dup2(1, pipe[1]);
+                        }
+                        _ => {
+                            libc::close(pipe[0]);
+                            libc::close(pipe[1]);
+                        }
+                    }
                     check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
                 }
                 mutex.lock().unwrap().exec();
@@ -193,13 +208,13 @@ impl SignalHandler {
     }
 
     pub fn wait(pid: c_int) -> ShellResult {
-        let mut child = {
+        let child = {
             let signal_handler = SIGNAL_HANDLER.lock().unwrap();
             signal_handler.children.get(&pid).unwrap().clone()
         };
         child.read().unwrap().wait_null()?;
         // Here child is zonbi state.
-        let mut child = {
+        let child = {
             let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
             signal_handler.children.remove(&pid).unwrap()
         };

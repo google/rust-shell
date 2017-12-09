@@ -47,6 +47,10 @@ impl JobSpec {
         unimplemented!()
     }
 
+    pub fn stdout(&mut self, redirect: Redirect) {
+        self.0.as_mut().unwrap().stdout = redirect;
+    }
+
     pub fn run(self) -> ShellResult {
         self.spawn().and_then(|job| job.wait())
     }
