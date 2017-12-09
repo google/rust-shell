@@ -31,7 +31,7 @@ impl From<env::VarError> for ShellError {
 
 pub type ShellResult = ::std::result::Result<(), ShellError>;
 
-pub fn check_errno(name: &'static str, 
+pub fn check_errno(name: &'static str,
                result: libc::c_int) -> Result<libc::c_int, ShellError> {
     if result != -1 {
         Ok(result)

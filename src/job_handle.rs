@@ -17,7 +17,7 @@ impl JobHandle {
     pub fn terminate(self) -> ShellResult {
         SignalHandler::signal(self.0.unwrap(), libc::SIGTERM)?;
         match self.wait() {
-            Ok(()) | Err(ShellError::Code(_)) 
+            Ok(()) | Err(ShellError::Code(_))
                 | Err(ShellError::Signaled(_)) => Ok(()),
             err => err
         }

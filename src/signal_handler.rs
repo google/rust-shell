@@ -1,23 +1,27 @@
-use ::libc;
-use ::libc::c_int;
 use ::Executable;
-use ::result::check_errno;
+use ::job_handle::JobHandle;
+use ::job_spec::Redirect;
+use ::libc::c_int;
+use ::libc;
 use ::result::ShellError;
 use ::result::ShellResult;
 use ::result::ShellResultExt;
-use ::std::sync::Arc;
-use ::std::sync::Mutex;
+use ::result::check_errno;
+use ::std::collections::HashMap;
 use ::std::mem;
 use ::std::panic;
 use ::std::process;
-use ::job_handle::JobHandle;
-use ::std::collections::HashMap;
+use ::std::sync::Arc;
+use ::std::sync::RwLock;
+use ::std::sync::Mutex;
 
+#[derive(Debug)]
 struct ChildProcessData {
     pid: c_int,
     has_group: bool
 }
 
+#[derive(Debug)]
 struct ChildProcess(Option<ChildProcessData>);
 
 impl ChildProcess {
@@ -49,7 +53,21 @@ impl ChildProcess {
         Ok(())
     }
 
-    fn wait(&mut self) -> ShellResult {
+    fn wait_null(&self) -> ShellResult {
+        unsafe {
+            let mut info = mem::uninitialized::<libc::siginfo_t>();
+            check_errno("waitid",
+                        libc::waitid(
+                            libc::P_PID,
+                            self.0.as_ref().unwrap().pid as u32,
+                            &mut info as *mut libc::siginfo_t,
+                            libc::WEXITED | libc::WNOWAIT))?;
+        }
+        Ok(())
+    }
+
+    /// Do not invoke it from the outside
+    fn wait_mut(&mut self) -> ShellResult {
         let data = mem::replace(&mut self.0, None).unwrap();
         let pid = data.pid;
         loop {
@@ -71,6 +89,10 @@ impl ChildProcess {
             }
         }
     }
+
+    fn wait(mut self) -> ShellResult {
+        self.wait_mut()
+    }
 }
 
 impl Drop for ChildProcess {
@@ -78,13 +100,13 @@ impl Drop for ChildProcess {
         if self.0.is_none() {
             return;
         }
-        self.wait().print_error();
+        self.wait_mut().print_error();
     }
 }
 
 /// Managing global child process state.
 pub struct SignalHandler {
-    children: HashMap<c_int, ChildProcess>
+    children: HashMap<c_int, Arc<RwLock<ChildProcess>>>
 }
 
 impl SignalHandler {
@@ -93,7 +115,7 @@ impl SignalHandler {
             let mut lock = SIGNAL_HANDLER.lock();
             if let Ok(ref mut signal_handler) = lock {
                 for child in signal_handler.children.values() {
-                    child.signal(signal).print_error();
+                    child.read().unwrap().signal(signal).print_error();
                 }
             }
             ::std::process::exit(128 + signal);
@@ -119,7 +141,8 @@ impl SignalHandler {
     }
 
     /// Fork new process
-    pub fn fork(executor: Box<Executable>, process_group: bool) 
+    pub fn fork(executor: Box<Executable>, process_group: bool,
+                stdin: Redirect, stdout: Redirect, stderr: Redirect)
             -> Result<JobHandle, ShellError> {
         unsafe {
             let pid = {
@@ -131,38 +154,57 @@ impl SignalHandler {
                         check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
                         child.set_has_group(true);
                     }
-                    lock.children.insert(pid, child);
+                    lock.children.insert(pid, Arc::new(RwLock::new(child)));
                     return Ok(JobHandle::new(pid));
                 } else {
                     for child in lock.children.drain() {
-                        child.1.forget();
+                        // After fork ChildProcess should not track parent
+                        // processes' ChildProcess. Thus we intentionally let
+                        // them leaked.
+                        mem::forget(child.1);
                     }
                 }
                 pid
             };
-
             let mutex = Mutex::new(executor);
-            panic::catch_unwind(move || {
-                if process_group {
+            let result = panic::catch_unwind(move || { if process_group {
                     check_errno("setpgid", libc::setpgid(pid, 0)).unwrap();
                 }
                 mutex.lock().unwrap().exec();
-            }).is_ok();
-            // The control reaches here only when the process was paniced.
-            process::exit(101);
+            });
+            match result {
+                Ok(_) => {
+                    eprintln!("exec() does not exit the child process");
+                    process::exit(1);
+                }
+                Err(error) => {
+                    eprintln!("Child process paniced {:?}", error);
+                    process::exit(101);
+                }
+            }
         }
     }
 
     pub fn signal(pid: c_int, signal: c_int) -> ShellResult {
         let signal_handler = SIGNAL_HANDLER.lock().unwrap();
         let child = signal_handler.children.get(&pid).unwrap();
+        let child = child.read().unwrap();
         child.signal(signal)
     }
 
     pub fn wait(pid: c_int) -> ShellResult {
-        let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
-        let mut child = signal_handler.children.remove(&pid).unwrap();
-        child.wait()
+        let mut child = {
+            let signal_handler = SIGNAL_HANDLER.lock().unwrap();
+            signal_handler.children.get(&pid).unwrap().clone()
+        };
+        child.read().unwrap().wait_null()?;
+        // Here child is zonbi state.
+        let mut child = {
+            let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
+            signal_handler.children.remove(&pid).unwrap()
+        };
+        let mut child = child.write().unwrap();
+        child.wait_mut()
     }
 }
 

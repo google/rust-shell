@@ -4,6 +4,8 @@ extern crate libc;
 use shell::check_errno;
 use shell::try;
 use shell::subshell;
+use std::thread;
+use std::time::Duration;
 
 #[test]
 fn test_command_run() {
@@ -15,18 +17,16 @@ fn test_command_run() {
 
 #[test]
 fn test_subshell_terminate() {
-    try(|| {
-        let job = subshell(|| {
-            subshell(|| {
-                ::std::thread::sleep(::std::time::Duration::from_secs(10));
-                Ok(())
-            }).spawn()?;
+    println!("test_subshell_terminate started");
+    let job = subshell(|| {
+        subshell(|| {
+            ::std::thread::sleep(::std::time::Duration::from_secs(1000));
             Ok(())
         }).spawn()?;
-        std::thread::sleep(::std::time::Duration::from_secs(1));
-        job.terminate()?;
         Ok(())
-    }).unwrap();
+    }).spawn().unwrap();
+    std::thread::sleep(::std::time::Duration::from_millis(100));
+    job.terminate().unwrap();
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn test_panic_in_spawn() {
 fn test_subshell_run() {
     shell::subshell(|| {
         unsafe {
-            let foreground_group = 
+            let foreground_group =
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
@@ -64,7 +64,7 @@ fn test_subshell_run() {
 fn test_subshell_spawn() {
     shell::subshell(|| {
         unsafe {
-            let foreground_group = 
+            let foreground_group =
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
@@ -79,7 +79,7 @@ fn test_subshell_spawn() {
 fn test_subshell_setpgid_spawn() {
     shell::subshell(|| {
         unsafe {
-            let foreground_group = 
+            let foreground_group =
                 check_errno("tcgetpgrp", libc::tcgetpgrp(0))?;
             let pid = libc::getpid();
             let pgid = check_errno("getpgid", libc::getpgid(0))?;
@@ -91,11 +91,12 @@ fn test_subshell_setpgid_spawn() {
 }
 
 #[test]
-fn test_subshell_kill() {
+fn test_subshell_kill_child() {
     let job = shell::subshell(|| {
+        println!("here ?");
         cmd!("sleep 3").run()
     }).spawn().unwrap();
-    cmd!("sleep 1").run().unwrap();
+    thread::sleep(Duration::from_millis(100));
     // Stop outputting process group.
     assert!(cmd!("pgrep sleep").run().is_ok());
     job.terminate().unwrap();
@@ -107,7 +108,7 @@ fn test_subshell_setsid_kill() {
     let job = shell::subshell(|| {
         cmd!("sleep 3").run()
     }).process_group().spawn().unwrap();
-    cmd!("sleep 1").run().unwrap();
+    thread::sleep(Duration::from_millis(100));
     // Stop outputting process group.
     assert!(cmd!("pgrep sleep").run().is_ok());
     job.terminate().unwrap();
@@ -117,11 +118,11 @@ fn test_subshell_setsid_kill() {
 #[test]
 fn test_kill_all_after_wait() {
     let job = shell::subshell(|| {
-        cmd!("sleep 1").run()?;
+        cmd!("sleep 0.01").run()?;
         cmd!("sleep 5").run()?;
         Ok(())
     }).spawn().unwrap();
-    cmd!("sleep 2").run().unwrap();
+    thread::sleep(Duration::from_millis(100));
     job.terminate().unwrap();
 }
 

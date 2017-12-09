@@ -54,7 +54,7 @@
 //! If you would like to run a command asynchronously, call async() instead of
 //! run(). async() returns JobHandler which you can use to kill or wait the
 //! running process. JobHandler automatically invokes wait() when it's dropped.
-//! So you will not get a zombi process. You can explicitly detach a process 
+//! So you will not get a zombi process. You can explicitly detach a process
 //! from job handler by calling detach() if you want to.
 //!
 //! ```test
@@ -105,8 +105,11 @@ pub mod result;
 pub use result::check_errno;
 use result::ShellResult;
 use ::job_spec::JobSpec;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt;
 
-pub trait Executable {
+pub trait Executable : Debug {
     fn exec(&mut self) -> !;
 }
 
@@ -120,6 +123,12 @@ pub fn subshell<F>(func: F) -> JobSpec where F: Fn() -> ShellResult + 'static {
 /// TODO: Change FnMut to FnOnce after fnbox is resolved.
 pub struct SubShell {
     func: Box<Fn() -> ShellResult + 'static>,
+}
+
+impl Debug for SubShell {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SubShell")
+    }
 }
 
 impl Executable for SubShell {

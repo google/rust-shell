@@ -60,13 +60,13 @@ pub fn new_command(format: &str, args: &[&str]) -> JobSpec {
 #[macro_export]
 macro_rules! cmd {
     ($format:expr) => ($crate::command::new_command($format, &[]));
-    ($format:expr, $($arg:expr),+) => 
+    ($format:expr, $($arg:expr),+) =>
         ($crate::command::new_command($format, &[$($arg),+]));
 }
 
 #[test]
 fn test_parse_cmd() {
-    let tokens = parse_cmd(r#"cmd 1 2 
+    let tokens = parse_cmd(r#"cmd 1 2
                               3 "
   4" {}"#, &["5"]);
     assert_eq!("cmd", tokens[0]);

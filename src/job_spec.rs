@@ -6,21 +6,36 @@ use std::path::Path;
 use ::signal_handler::SignalHandler;
 use std::mem;
 
-pub struct JobSpec {
-    executable: Option<Box<Executable>>,
-    process_group: bool
+#[derive(Debug)]
+pub enum Redirect {
+    Inherit,
+    Capture,
 }
+
+#[derive(Debug)]
+struct JobSpecData {
+    executable: Box<Executable>,
+    process_group: bool,
+    stdin: Redirect,
+    stdout: Redirect,
+    stderr: Redirect
+}
+
+pub struct JobSpec(Option<JobSpecData>);
 
 impl JobSpec {
     pub fn new<T>(executable: T) -> JobSpec where T : Executable + 'static {
-        JobSpec {
-            executable: Some(Box::new(executable)),
-            process_group: false
-        }
+        JobSpec(Some(JobSpecData {
+            executable: Box::new(executable),
+            process_group: false,
+            stdin: Redirect::Inherit,
+            stdout: Redirect::Inherit,
+            stderr: Redirect::Inherit
+        }))
     }
 
     pub fn process_group(mut self) -> Self {
-        self.process_group = true;
+        self.0.as_mut().unwrap().process_group = true;
         self
     }
 
@@ -41,19 +56,20 @@ impl JobSpec {
     }
 
     fn inner_spawn(&mut self) -> Result<JobHandle, ShellError> {
-        let executable = match mem::replace(&mut self.executable, None) {
-            Some(executable) => executable,
+        let data = match mem::replace(&mut self.0, None) {
+            Some(data) => data,
             None => {
                 return Err(ShellError::InvalidExecutable);
             }
         };
-        SignalHandler::fork(executable, self.process_group)
+        SignalHandler::fork(data.executable, data.process_group, data.stdin,
+                            data.stdout, data.stderr)
     }
 }
 
 impl Drop for JobSpec {
     fn drop(&mut self) {
-        if self.executable.is_none() {
+        if self.0.is_none() {
             return;
         }
         self.inner_spawn().and_then(|job| job.wait()).unwrap();
