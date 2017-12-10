@@ -212,6 +212,6 @@ impl ProcessManager {
 }
 
 lazy_static! {
-    static ref SIGNAL_HANDLER: Arc<Mutex<ProcessManager>> =
-        Arc::new(Mutex::new(ProcessManager::new()));
+    static ref SIGNAL_HANDLER: Mutex<ProcessManager> =
+        Mutex::new(ProcessManager::new());
 }
