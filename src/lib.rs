@@ -101,6 +101,7 @@ mod job_handle;
 mod job_spec;
 mod pipe_capture;
 mod process_manager;
+mod local_shell;
 pub mod result;
 
 pub use result::check_errno;

@@ -8,6 +8,7 @@ use result::ShellError;
 use result::ShellResult;
 use result::ShellResultExt;
 use result::check_errno;
+use std::cell::RefCell;
 use std::mem;
 use std::panic;
 use std::process;
@@ -16,6 +17,7 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 use std::thread::ThreadId;
 use std::thread;
+use local_shell::LocalShell;
 
 #[derive(Debug)]
 struct ChildProcessData {
@@ -128,6 +130,12 @@ impl ProcessManager {
         ProcessManager {
             children: Vec::new()
         }
+    }
+
+    pub fn add_local_shell(&mut self, shell: &Arc<RefCell<LocalShell>>) {
+    }
+
+    pub fn remove_local_shell(&mut self, shell: &Arc<RefCell<LocalShell>>) {
     }
 
     pub fn remove_job(&mut self, job: &Arc<RwLock<ChildProcess>>) {
