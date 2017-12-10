@@ -109,6 +109,8 @@ use ::job_spec::JobSpec;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt;
+use std::thread::ThreadId;
+use process_manager::PROCESS_MANAGER;
 
 pub trait Executable : Debug {
     fn exec(&mut self) -> !;
@@ -141,4 +143,9 @@ impl Executable for SubShell {
 
 pub fn try<F>(f: F) -> ShellResult where F: FnOnce() -> ShellResult {
     f()
+}
+
+pub fn signal_thread_jobs(id: &ThreadId) {
+    let mut lock = PROCESS_MANAGER.lock().unwrap();
+    lock.signal_thread_jobs(id, libc::SIGTERM);
 }

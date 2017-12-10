@@ -15,6 +15,7 @@ pub enum ShellError {
     VarError(env::VarError),
     Errno(&'static str, Errno),
     InvalidExecutable,
+    NoSuchProcess,
 }
 
 impl From<io::Error> for ShellError {

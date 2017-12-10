@@ -126,3 +126,12 @@ fn test_kill_all_after_wait() {
     job.terminate().unwrap();
 }
 
+#[test]
+fn test_kill_thread_job() {
+    let id = thread::spawn(|| {
+        cmd!("sleep 5");
+    });
+    thread::sleep(Duration::from_millis(100));
+    shell::signal_thread_jobs(&id.thread().id());
+    id.join();
+}
