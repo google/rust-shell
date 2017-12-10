@@ -3,7 +3,7 @@ use job_handle::JobHandle;
 use result::ShellResult;
 use result::ShellError;
 use std::path::Path;
-use ::signal_handler::SignalHandler;
+use ::process_manager::ProcessManager;
 use std::mem;
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ impl JobSpec {
                 return Err(ShellError::InvalidExecutable);
             }
         };
-        SignalHandler::fork(data.executable, data.process_group, data.stdin,
+        ProcessManager::fork(data.executable, data.process_group, data.stdin,
                             data.stdout, data.stderr)
     }
 }

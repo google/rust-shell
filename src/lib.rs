@@ -100,7 +100,7 @@ extern crate errno;
 mod job_handle;
 mod job_spec;
 mod pipe_capture;
-mod signal_handler;
+mod process_manager;
 pub mod result;
 
 pub use result::check_errno;

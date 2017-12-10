@@ -2,7 +2,7 @@ use ::libc;
 use ::libc::c_int;
 use result::ShellError;
 use result::ShellResult;
-use ::signal_handler::SignalHandler;
+use ::process_manager::ProcessManager;
 use ::std::mem;
 use pipe_capture::PipeCapture;
 
@@ -25,7 +25,7 @@ impl JobHandle {
 
     /// Sends a SIGTERM to a process group, then wait a process leader.
     pub fn terminate(self) -> ShellResult {
-        SignalHandler::signal(self.0.as_ref().unwrap().pid, libc::SIGTERM)?;
+        ProcessManager::signal(self.0.as_ref().unwrap().pid, libc::SIGTERM)?;
         match self.wait() {
             Ok(()) | Err(ShellError::Code(_))
                 | Err(ShellError::Signaled(_)) => Ok(()),
@@ -41,7 +41,7 @@ impl JobHandle {
     fn wait_mut(&mut self) -> ShellResult {
         let data = mem::replace(&mut self.0, None).unwrap();
         let pid = data.pid;
-        SignalHandler::wait(pid)
+        ProcessManager::wait(pid)
     }
 }
 

@@ -97,16 +97,16 @@ impl Drop for ChildProcess {
 }
 
 /// Managing global child process state.
-pub struct SignalHandler {
+pub struct ProcessManager {
     children: HashMap<c_int, Arc<RwLock<ChildProcess>>>
 }
 
-impl SignalHandler {
+impl ProcessManager {
     extern fn handle_signal(signal: c_int) {
         ::std::thread::spawn(move || {
             let mut lock = SIGNAL_HANDLER.lock();
-            if let Ok(ref mut signal_handler) = lock {
-                for child in signal_handler.children.values() {
+            if let Ok(ref mut process_manager) = lock {
+                for child in process_manager.children.values() {
                     child.read().unwrap().signal(signal).print_error();
                 }
             }
@@ -114,20 +114,20 @@ impl SignalHandler {
         });
     }
 
-    fn new() -> SignalHandler {
+    fn new() -> ProcessManager {
         let result = unsafe {
-            libc::signal(libc::SIGINT, SignalHandler::handle_signal as usize)
+            libc::signal(libc::SIGINT, ProcessManager::handle_signal as usize)
         };
         if result == ::libc::SIG_ERR {
             panic!("signal failed");
         }
         let result = unsafe {
-            libc::signal(libc::SIGTERM, SignalHandler::handle_signal as usize)
+            libc::signal(libc::SIGTERM, ProcessManager::handle_signal as usize)
         };
         if result == ::libc::SIG_ERR {
             panic!("signal failed");
         }
-        SignalHandler {
+        ProcessManager {
             children: HashMap::new()
         }
     }
@@ -189,22 +189,22 @@ impl SignalHandler {
     }
 
     pub fn signal(pid: c_int, signal: c_int) -> ShellResult {
-        let signal_handler = SIGNAL_HANDLER.lock().unwrap();
-        let child = signal_handler.children.get(&pid).unwrap();
+        let process_manager = SIGNAL_HANDLER.lock().unwrap();
+        let child = process_manager.children.get(&pid).unwrap();
         let child = child.read().unwrap();
         child.signal(signal)
     }
 
     pub fn wait(pid: c_int) -> ShellResult {
         let child = {
-            let signal_handler = SIGNAL_HANDLER.lock().unwrap();
-            signal_handler.children.get(&pid).unwrap().clone()
+            let process_manager = SIGNAL_HANDLER.lock().unwrap();
+            process_manager.children.get(&pid).unwrap().clone()
         };
         child.read().unwrap().wait_null()?;
         // Here child is zonbi state.
         let child = {
-            let mut signal_handler = SIGNAL_HANDLER.lock().unwrap();
-            signal_handler.children.remove(&pid).unwrap()
+            let mut process_manager = SIGNAL_HANDLER.lock().unwrap();
+            process_manager.children.remove(&pid).unwrap()
         };
         let mut child = child.write().unwrap();
         child.wait_mut()
@@ -212,6 +212,6 @@ impl SignalHandler {
 }
 
 lazy_static! {
-    static ref SIGNAL_HANDLER: Arc<Mutex<SignalHandler>> =
-        Arc::new(Mutex::new(SignalHandler::new()));
+    static ref SIGNAL_HANDLER: Arc<Mutex<ProcessManager>> =
+        Arc::new(Mutex::new(ProcessManager::new()));
 }
