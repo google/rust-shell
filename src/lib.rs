@@ -105,16 +105,18 @@ mod local_shell;
 pub mod result;
 
 pub use result::check_errno;
+use job_spec::JobSpec;
+use process_manager::PROCESS_MANAGER;
 use result::ShellResult;
-use ::job_spec::JobSpec;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt;
+use std::process::Command;
 use std::thread::ThreadId;
-use process_manager::PROCESS_MANAGER;
 
 pub trait Executable : Debug {
     fn exec(&mut self) -> !;
+    fn command(self) -> Command;
 }
 
 pub fn subshell<F>(func: F) -> JobSpec where F: Fn() -> ShellResult + 'static {
@@ -139,6 +141,10 @@ impl Executable for SubShell {
     fn exec(&mut self) -> ! {
         (self.func)().unwrap();
         std::process::exit(0);
+    }
+
+    fn command(self) -> Command {
+        unimplemented!();
     }
 }
 

@@ -1,9 +1,8 @@
-use ::Executable;
+use Executable;
 use job_handle::JobHandle;
 use result::ShellResult;
 use result::ShellError;
 use std::path::Path;
-use ::process_manager::ProcessManager;
 use std::mem;
 
 #[derive(Debug)]
@@ -66,8 +65,8 @@ impl JobSpec {
                 return Err(ShellError::InvalidExecutable);
             }
         };
-        ProcessManager::fork(data.executable, data.process_group, data.stdin,
-                            data.stdout, data.stderr)
+        let command = data.executable.command();
+        JobHandle::new(command, data.process_group)
     }
 }
 

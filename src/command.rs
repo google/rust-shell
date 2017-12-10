@@ -27,6 +27,10 @@ impl Executable for Command {
     fn exec(&mut self) -> ! {
         panic!("Failed to execute command {:?}", CommandExt::exec(self));
     }
+
+    fn command(self) -> Command {
+        self
+    }
 }
 
 fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
