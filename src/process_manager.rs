@@ -104,7 +104,7 @@ pub struct ProcessManager {
 impl ProcessManager {
     extern fn handle_signal(signal: c_int) {
         ::std::thread::spawn(move || {
-            let mut lock = SIGNAL_HANDLER.lock();
+            let mut lock = PROCESS_MANAGER.lock();
             if let Ok(ref mut process_manager) = lock {
                 for child in process_manager.children.values() {
                     child.read().unwrap().signal(signal).print_error();
@@ -142,7 +142,7 @@ impl ProcessManager {
                 _ => None
             };
             let pid = {
-                let mut lock = SIGNAL_HANDLER.lock().unwrap();
+                let mut lock = PROCESS_MANAGER.lock().unwrap();
                 let pid = check_errno("fork", libc::fork())?;
                 if pid != 0 {
                     let mut child = ChildProcess::new(pid);
@@ -189,7 +189,7 @@ impl ProcessManager {
     }
 
     pub fn signal(pid: c_int, signal: c_int) -> ShellResult {
-        let process_manager = SIGNAL_HANDLER.lock().unwrap();
+        let process_manager = PROCESS_MANAGER.lock().unwrap();
         let child = process_manager.children.get(&pid).unwrap();
         let child = child.read().unwrap();
         child.signal(signal)
@@ -197,13 +197,13 @@ impl ProcessManager {
 
     pub fn wait(pid: c_int) -> ShellResult {
         let child = {
-            let process_manager = SIGNAL_HANDLER.lock().unwrap();
+            let process_manager = PROCESS_MANAGER.lock().unwrap();
             process_manager.children.get(&pid).unwrap().clone()
         };
         child.read().unwrap().wait_null()?;
         // Here child is zonbi state.
         let child = {
-            let mut process_manager = SIGNAL_HANDLER.lock().unwrap();
+            let mut process_manager = PROCESS_MANAGER.lock().unwrap();
             process_manager.children.remove(&pid).unwrap()
         };
         let mut child = child.write().unwrap();
@@ -212,6 +212,6 @@ impl ProcessManager {
 }
 
 lazy_static! {
-    static ref SIGNAL_HANDLER: Mutex<ProcessManager> =
+    static ref PROCESS_MANAGER: Mutex<ProcessManager> =
         Mutex::new(ProcessManager::new());
 }
