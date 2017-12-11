@@ -70,23 +70,20 @@
 //! # }
 //! ```
 //!
-//! # Subshell
+//! # Threading
 //!
-//! You can create a subshell which is a separated process to run shell
-//! command by using subshell() function. subshell() returns a command so
-//! that you can call run(), async() as well as a normal external command.
+//! You can create a subshell by spawning a new thread.
 //!
 //! ```
 //! #[macro_use] extern crate shell;
+//! # use shell::result::ShellResult;
 //! # fn main() {
-//! shell::subshell(|| {
-//!     // Running in a separated process so changing current directory does
-//!     // not affect a parante process.
-//!     std::env::set_current_dir("./src")?;
-//!     std::env::set_var("ENV_NAME", "HOGE");
-//!     cmd!("echo test").run()?;
-//!     Ok(())
-//! }).run().unwrap();
+//! let job = shell::spawn(|| -> ShellResult {
+//!   cmd!("sleep 3").run()?;
+//!   Ok(())
+//! });
+//!
+//! job.terminate().unwrap().is_err();
 //! # }
 //! ```
 //!
@@ -99,60 +96,8 @@ extern crate errno;
 #[macro_use] pub mod command;
 mod job_handle;
 mod job_spec;
-mod pipe_capture;
 mod process_manager;
 mod local_shell;
 pub mod result;
 
-pub use result::check_errno;
-use job_spec::JobSpec;
-use process_manager::PROCESS_MANAGER;
-use result::ShellResult;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::fmt;
-use std::process::Command;
-use std::thread::ThreadId;
-
-pub trait Executable : Debug {
-    fn exec(&mut self) -> !;
-    fn command(self) -> Command;
-}
-
-pub fn subshell<F>(func: F) -> JobSpec where F: Fn() -> ShellResult + 'static {
-    JobSpec::new(SubShell {
-        func: Box::new(func)
-    })
-}
-
-/// Block
-/// TODO: Change FnMut to FnOnce after fnbox is resolved.
-pub struct SubShell {
-    func: Box<Fn() -> ShellResult + 'static>,
-}
-
-impl Debug for SubShell {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "SubShell")
-    }
-}
-
-impl Executable for SubShell {
-    fn exec(&mut self) -> ! {
-        (self.func)().unwrap();
-        std::process::exit(0);
-    }
-
-    fn command(self) -> Command {
-        unimplemented!();
-    }
-}
-
-pub fn try<F>(f: F) -> ShellResult where F: FnOnce() -> ShellResult {
-    f()
-}
-
-pub fn signal_thread_jobs(id: &ThreadId) {
-    let mut lock = PROCESS_MANAGER.lock().unwrap();
-    lock.signal_thread_jobs(id, libc::SIGTERM);
-}
+pub use local_shell::spawn;

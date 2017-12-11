@@ -5,11 +5,10 @@ use result::ShellResult;
 use std::mem;
 use std::sync::Arc;
 use std::sync::RwLock;
-use local_shell::LOCAL_SHELL;
 use result::check_errno;
 use std::process::Child;
 use std::process::Command;
-use std::process::ExitStatus;
+use local_shell::current_shell;
 
 #[derive(Debug)]
 struct ChildProcessData {
@@ -61,12 +60,17 @@ impl ChildProcess {
         Ok(())
     }
 
-    pub fn wait_mut(&mut self) -> Result<ExitStatus, ShellError> {
+    fn wait_mut(&mut self) -> Result<(), ShellError> {
         let mut data = match mem::replace(&mut self.0, None) {
             Some(data) => data,
             None => return Err(ShellError::NoSuchProcess)
         };
-        Ok(data.child.wait()?)
+        let status = data.child.wait()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(ShellError::Status(status))
+        }
     }
 }
 
@@ -76,14 +80,16 @@ pub struct JobHandle(Arc<RwLock<ChildProcess>>);
 impl JobHandle {
     pub fn new(mut command: Command, has_group: bool) 
             -> Result<JobHandle, ShellError> {
-        LOCAL_SHELL.with(|shell| {
-            let mut lock = shell.lock().unwrap();
-            let child = command.spawn()?;
-            let process = Arc::new(RwLock::new(
-                    ChildProcess::new(child, has_group)));
-            lock.add_process(&process);
-            Ok(JobHandle(process))
-        })
+        let shell = current_shell();
+        let mut lock = shell.lock().unwrap();
+        if lock.signaled() {
+            return Err(ShellError::Signaled(101))
+        }
+        let child = command.spawn()?;
+        let process = Arc::new(RwLock::new(
+                ChildProcess::new(child, has_group)));
+        lock.add_process(&process);
+        Ok(JobHandle(process))
     }
 
     pub fn signal(&self, signal: c_int) -> ShellResult {
@@ -94,7 +100,9 @@ impl JobHandle {
 
     /// Sends a SIGTERM to a process group, then wait a process leader.
     pub fn terminate(self) -> ShellResult {
+        println!("Job handle #1");
         self.signal(libc::SIGTERM)?;
+        println!("Job handle #2");
         match self.wait() {
             Ok(()) | Err(ShellError::Code(_))
                 | Err(ShellError::Signaled(_)) => Ok(()),
@@ -116,16 +124,9 @@ impl JobHandle {
             let mut data = self.0.write().unwrap();
             data.wait_mut()?;
         }
-        LOCAL_SHELL.with(|shell| {
-            let mut lock = shell.lock().unwrap();
-            lock.remove_process(&self.0)
-        });
+        let shell = current_shell();
+        let mut lock = shell.lock().unwrap();
+        lock.remove_process(&self.0);
         Ok(())
-    }
-}
-
-impl Drop for JobHandle {
-    fn drop(&mut self) {
-        self.wait_mut();
     }
 }

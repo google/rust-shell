@@ -6,6 +6,7 @@ use errno::errno;
 use std::convert::From;
 use std::env;
 use std::io;
+use std::process::ExitStatus;
 
 #[derive(Debug)]
 pub enum ShellError {
@@ -14,6 +15,7 @@ pub enum ShellError {
     IoError(io::Error),
     VarError(env::VarError),
     Errno(&'static str, Errno),
+    Status(ExitStatus),
     InvalidExecutable,
     NoSuchProcess,
 }

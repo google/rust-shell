@@ -1,7 +1,5 @@
-use ::Executable;
 use ::job_spec::JobSpec;
 use ::nom::IResult;
-use std::os::unix::process::CommandExt;
 use std::process::Command;
 
 fn token_char(ch: char) -> bool {
@@ -23,14 +21,11 @@ named!(command_token<&str, &str>,
 named!(command< &str, Vec<&str> >,
        terminated!(ws!(many1!(command_token)), eof!()));
 
-impl Executable for Command {
-    fn exec(&mut self) -> ! {
-        panic!("Failed to execute command {:?}", CommandExt::exec(self));
-    }
-
-    fn command(self) -> Command {
-        self
-    }
+#[macro_export]
+macro_rules! cmd {
+    ($format:expr) => ($crate::command::new_command($format, &[]));
+    ($format:expr, $($arg:expr),+) =>
+        ($crate::command::new_command($format, &[$($arg),+]));
 }
 
 fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
@@ -61,12 +56,6 @@ pub fn new_command(format: &str, args: &[&str]) -> JobSpec {
     JobSpec::new(command)
 }
 
-#[macro_export]
-macro_rules! cmd {
-    ($format:expr) => ($crate::command::new_command($format, &[]));
-    ($format:expr, $($arg:expr),+) =>
-        ($crate::command::new_command($format, &[$($arg),+]));
-}
 
 #[test]
 fn test_parse_cmd() {

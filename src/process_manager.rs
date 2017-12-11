@@ -1,30 +1,23 @@
 use libc::c_int;
 use libc;
-use result::ShellResultExt;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::RwLock;
 use std::thread::ThreadId;
 use local_shell::LocalShell;
-use job_handle::ChildProcess;
-
-
-struct ProcessEntry {
-    thread_id: ThreadId,
-    process: Arc<RwLock<ChildProcess>>
-}
+use std::collections::HashMap;
 
 /// Managing global child process state.
 pub struct ProcessManager {
-    children: Vec<ProcessEntry>
+    children: HashMap<ThreadId, Arc<Mutex<LocalShell>>>
 }
 
 impl ProcessManager {
     extern fn handle_signal(signal: c_int) {
         ::std::thread::spawn(move || {
             let mut lock = PROCESS_MANAGER.lock().unwrap();
-            for entry in lock.children.drain(..) {
-                entry.process.read().unwrap().signal(signal).print_error();
+            for (_, entry) in lock.children.drain() {
+                let mut lock = entry.lock().unwrap();
+                lock.signal(signal);
             }
             ::std::process::exit(128 + signal);
         });
@@ -44,26 +37,25 @@ impl ProcessManager {
             panic!("signal failed");
         }
         ProcessManager {
-            children: Vec::new()
+            children: HashMap::new()
         }
     }
 
-    pub fn add_local_shell(&mut self, shell: &Arc<Mutex<LocalShell>>) {
+    pub fn add_local_shell(&mut self, id: &ThreadId, 
+                           shell: &Arc<Mutex<LocalShell>>) {
+        self.children.insert(id.clone(), shell.clone());
     }
 
-    pub fn remove_local_shell(&mut self, shell: &Arc<Mutex<LocalShell>>) {
-    }
-
-    pub fn remove_job(&mut self, job: &Arc<RwLock<ChildProcess>>) {
-        self.children.retain(|entry| !Arc::ptr_eq(&entry.process, job));
+    pub fn remove_local_shell(&mut self, id: &ThreadId) {
+        self.children.remove(id);
     }
 
     pub fn signal_thread_jobs(&mut self, id: &ThreadId, signal: c_int) {
-        for entry in &self.children {
-            if entry.thread_id != *id {
-                continue;
+        for (_, local_shell) in &self.children {
+            let mut lock = local_shell.lock().unwrap();
+            if lock.thread_id() == id {
+                lock.signal(signal);
             }
-            entry.process.read().unwrap().signal(signal).print_error();
         }
     }
 }

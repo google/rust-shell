@@ -1,40 +1,24 @@
-use Executable;
 use job_handle::JobHandle;
 use result::ShellResult;
 use result::ShellError;
 use std::path::Path;
-use std::mem;
+use std::process::Command;
 
-#[derive(Debug)]
-pub enum Redirect {
-    Inherit,
-    Capture,
+pub struct JobSpec {
+    command: Command,
+    has_group: bool
 }
-
-#[derive(Debug)]
-struct JobSpecData {
-    executable: Box<Executable>,
-    process_group: bool,
-    stdin: Redirect,
-    stdout: Redirect,
-    stderr: Redirect
-}
-
-pub struct JobSpec(Option<JobSpecData>);
 
 impl JobSpec {
-    pub fn new<T>(executable: T) -> JobSpec where T : Executable + 'static {
-        JobSpec(Some(JobSpecData {
-            executable: Box::new(executable),
-            process_group: false,
-            stdin: Redirect::Inherit,
-            stdout: Redirect::Inherit,
-            stderr: Redirect::Inherit
-        }))
+    pub fn new(command: Command) -> JobSpec {
+        JobSpec {
+            command: command,
+            has_group: false,
+        }
     }
 
-    pub fn process_group(mut self) -> Self {
-        self.0.as_mut().unwrap().process_group = true;
+    pub fn set_has_group(mut self) -> Self {
+        self.has_group = true;
         self
     }
 
@@ -46,36 +30,12 @@ impl JobSpec {
         unimplemented!()
     }
 
-    pub fn stdout(&mut self, redirect: Redirect) {
-        self.0.as_mut().unwrap().stdout = redirect;
-    }
-
     pub fn run(self) -> ShellResult {
         self.spawn().and_then(|job| job.wait())
     }
 
-    pub fn spawn(mut self) -> Result<JobHandle, ShellError> {
-        self.inner_spawn()
-    }
-
-    fn inner_spawn(&mut self) -> Result<JobHandle, ShellError> {
-        let data = match mem::replace(&mut self.0, None) {
-            Some(data) => data,
-            None => {
-                return Err(ShellError::InvalidExecutable);
-            }
-        };
-        let command = data.executable.command();
-        JobHandle::new(command, data.process_group)
-    }
-}
-
-impl Drop for JobSpec {
-    fn drop(&mut self) {
-        if self.0.is_none() {
-            return;
-        }
-        self.inner_spawn().and_then(|job| job.wait()).unwrap();
+    pub fn spawn(self) -> Result<JobHandle, ShellError> {
+        JobHandle::new(self.command, self.has_group)
     }
 }
 
@@ -84,5 +44,5 @@ fn test_job_spec_2() {
     use std::process::Command;
     let mut command = Command::new("echo");
     command.arg("The command was run");
-    JobSpec::new(command).process_group();
+    JobSpec::new(command).set_has_group();
 }
