@@ -37,7 +37,8 @@ impl ChildProcess {
         } else {
             data.child.id() as i32
         };
-        eprintln!("Sending signal {} to {}", sig, data.child.id());
+        
+        info!("Sending signal {} to {}", sig, data.child.id());
         unsafe {
             check_errno("kill", libc::kill(kill_pid, sig))?;
         }

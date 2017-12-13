@@ -8,12 +8,12 @@ name = "runtest"
 path = "src/runtest.rs"
 
 [dependencies]
-stderrlog = "0.2.3"
 errno = "*"
 lazy_static = "1.0"
 libc = "0.2"
 log = "0.3.8"
 regex = "0.2"
+env_logger = "0.4.3"
 
 [dependencies.nom]
 version = "^3.2"

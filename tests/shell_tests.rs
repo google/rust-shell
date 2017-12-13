@@ -1,20 +1,26 @@
+#[macro_use] extern crate log;
 #[macro_use] extern crate shell;
 extern crate libc;
+extern crate env_logger;
 
 use std::thread;
 use std::time::Duration;
 use shell::result::ShellResult;
-use std::env;
 use libc::c_int;
+
+fn setup() {
+    env_logger::init().unwrap_or_default();
+}
 
 #[test]
 fn test_command_run() {
+    setup();
     cmd!("test 0 = 0").run().unwrap();
 }
 
 #[test]
 fn test_subshell_kill_child() {
-    env::set_var("RUST_LOG", "debug");
+    setup();
     let job = shell::spawn(|| -> ShellResult {
         cmd!("sleep 3").run()
     });
@@ -27,6 +33,7 @@ fn test_subshell_kill_child() {
 
 #[test]
 fn test_kill_all_after_wait() {
+    setup();
     let job = shell::spawn(|| -> ShellResult {
         cmd!("sleep 0.05").run()?;
         cmd!("sleep 2").run()?;
@@ -38,6 +45,7 @@ fn test_kill_all_after_wait() {
 
 #[test]
 fn test_kill_thread_job() {
+    setup();
     let job = shell::spawn(|| -> ShellResult {
         cmd!("sleep 5").run()?;
         Ok(())
@@ -48,6 +56,7 @@ fn test_kill_thread_job() {
 
 #[test]
 fn test_signal_before_run() {
+    setup();
     let job = shell::spawn(|| -> ShellResult {
         thread::sleep(Duration::from_millis(100));
         cmd!("sleep 1").run()?;
@@ -58,6 +67,7 @@ fn test_signal_before_run() {
 
 #[test]
 fn test_delegate_signal() {
+    setup();
     let result = unsafe {
         let result = libc::fork();
         assert_ne!(result, -1);
@@ -65,7 +75,7 @@ fn test_delegate_signal() {
     };
     if result == 0 {
         shell::delegate_signal().unwrap();
-        let job = cmd!("sleep 5").spawn().unwrap();
+        cmd!("sleep 5").spawn().unwrap();
         unsafe {
             assert_eq!(libc::kill(libc::getpid(), libc::SIGTERM), 0);
         }

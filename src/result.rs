@@ -60,7 +60,9 @@ impl <T> ShellResultExt for ::std::result::Result<T, ShellError> {
     fn print_error(self) {
         match self {
             Ok(_) => return,
-            Err(err) => { eprintln!("{:?}", err); }
+            Err(err) => {
+                info!("Shell error {:?}", err);
+            }
         }
     }
 }
