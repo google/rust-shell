@@ -1,16 +1,17 @@
 use job_handle::ChildProcess;
+use libc::c_int;
+use libc;
 use process_manager::PROCESS_MANAGER;
+use result::ShellResultExt;
+use std::any::Any;
+use std::cell::RefCell;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
-use libc;
-use libc::c_int;
-use result::ShellResultExt;
+use std::thread::JoinHandle;
 use std::thread::ThreadId;
 use std::thread;
-use std::thread::JoinHandle;
-use std::any::Any;
-use std::cell::RefCell;
 
 /// Thread local shell.
 pub struct LocalShell {
@@ -93,6 +94,17 @@ impl <T> ShellHandle<T> {
     pub fn terminate(self) -> Result<T, Box<Any + Send + 'static>> {
         self.signal(libc::SIGTERM);
         self.join_handle.join()
+    }
+
+    pub fn join(self) -> Result<T, Box<Any + Send + 'static>> {
+        self.join_handle.join()
+    }
+}
+
+impl <T> Deref for ShellHandle<T> {
+    type Target = JoinHandle<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.join_handle
     }
 }
 
