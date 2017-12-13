@@ -101,3 +101,4 @@ mod local_shell;
 pub mod result;
 
 pub use local_shell::spawn;
+pub use process_manager::delegate_signal;

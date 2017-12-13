@@ -69,8 +69,7 @@ impl LocalShellScope {
 
 impl Default for LocalShellScope {
     fn default() -> LocalShellScope {
-        let id = thread::current().id();
-        LocalShellScope(id, Arc::new(Mutex::new(LocalShell::new())))
+        LocalShellScope::new(&Arc::new(Mutex::new(LocalShell::new())))
     }
 }
 

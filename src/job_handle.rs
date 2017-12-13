@@ -37,6 +37,7 @@ impl ChildProcess {
         } else {
             data.child.id() as i32
         };
+        eprintln!("Sending signal {} to {}", sig, data.child.id());
         unsafe {
             check_errno("kill", libc::kill(kill_pid, sig))?;
         }
@@ -100,9 +101,7 @@ impl JobHandle {
 
     /// Sends a SIGTERM to a process group, then wait a process leader.
     pub fn terminate(self) -> ShellResult {
-        println!("Job handle #1");
         self.signal(libc::SIGTERM)?;
-        println!("Job handle #2");
         match self.wait() {
             Ok(()) | Err(ShellError::Code(_))
                 | Err(ShellError::Signaled(_)) => Ok(()),
