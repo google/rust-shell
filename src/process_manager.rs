@@ -1,10 +1,17 @@
 use libc::c_int;
 use libc;
+use libc::sigset_t;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::ThreadId;
 use local_shell::LocalShell;
 use std::collections::HashMap;
+use result::check_errno;
+use result::ShellError;
+use result::ShellResult;
+use std::mem;
+use errno::Errno;
+use std::thread;
 
 /// Managing global child process state.
 pub struct ProcessManager {
@@ -12,30 +19,7 @@ pub struct ProcessManager {
 }
 
 impl ProcessManager {
-    extern fn handle_signal(signal: c_int) {
-        ::std::thread::spawn(move || {
-            let mut lock = PROCESS_MANAGER.lock().unwrap();
-            for (_, entry) in lock.children.drain() {
-                let mut lock = entry.lock().unwrap();
-                lock.signal(signal);
-            }
-            ::std::process::exit(128 + signal);
-        });
-    }
-
     fn new() -> ProcessManager {
-        let result = unsafe {
-            libc::signal(libc::SIGINT, ProcessManager::handle_signal as usize)
-        };
-        if result == ::libc::SIG_ERR {
-            panic!("signal failed");
-        }
-        let result = unsafe {
-            libc::signal(libc::SIGTERM, ProcessManager::handle_signal as usize)
-        };
-        if result == ::libc::SIG_ERR {
-            panic!("signal failed");
-        }
         ProcessManager {
             children: HashMap::new()
         }
@@ -49,14 +33,49 @@ impl ProcessManager {
     pub fn remove_local_shell(&mut self, id: &ThreadId) {
         self.children.remove(id);
     }
+}
 
-    pub fn signal_thread_jobs(&mut self, id: &ThreadId, signal: c_int) {
-        for (_, local_shell) in &self.children {
-            let mut lock = local_shell.lock().unwrap();
-            if lock.thread_id() == id {
+/// Delegates SIGINT and SIGTERM to child processes.
+#[allow(dead_code)]
+pub fn delegate_signal() -> ShellResult {
+    unsafe {
+        let mut sigset = mem::uninitialized::<sigset_t>();
+        check_errno("sigemptyset",
+                    libc::sigemptyset(&mut sigset as *mut sigset_t))?;
+        check_errno("sigaddset", libc::sigaddset(
+                &mut sigset as *mut sigset_t, libc::SIGINT))?;
+        check_errno("sigaddset", libc::sigaddset(
+                &mut sigset as *mut sigset_t, libc::SIGTERM))?;
+
+        let mut oldset = mem::uninitialized::<sigset_t>();
+        let result = libc::pthread_sigmask(
+            libc::SIG_BLOCK, &mut sigset as *mut sigset_t,
+            &mut oldset as *mut sigset_t);
+        if result != 0 {
+            return Err(ShellError::Errno("pthread_sigmask", Errno(result)));
+        }
+
+        thread::spawn(move || {
+            let mut signal: c_int = 0;
+            let result = libc::sigwait(
+                &sigset as *const sigset_t, &mut signal as *mut c_int);
+            if result != 0 {
+                eprintln!("sigwait failed {}", result);
+                return;
+            }
+            let mut lock = PROCESS_MANAGER.lock().unwrap();
+            let mut children = lock.children.drain().collect::<Vec<_>>();
+            for &mut (_, ref entry) in &mut children {
+                let mut lock = entry.lock().unwrap();
                 lock.signal(signal);
             }
-        }
+            for &mut (_, ref entry) in &mut children {
+                let mut lock = entry.lock().unwrap();
+                lock.wait();
+            }
+            ::std::process::exit(128 + signal);
+        });
+        Ok(())
     }
 }
 

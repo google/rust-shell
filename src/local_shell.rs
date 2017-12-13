@@ -15,7 +15,6 @@ use std::thread;
 
 /// Thread local shell.
 pub struct LocalShell {
-    thread_id: ThreadId,
     processes: Vec<Arc<RwLock<ChildProcess>>>,
     signaled: bool
 }
@@ -23,7 +22,6 @@ pub struct LocalShell {
 impl LocalShell {
     fn new() -> LocalShell {
         LocalShell {
-            thread_id: thread::current().id(),
             processes: Vec::new(),
             signaled: false
         }
@@ -45,12 +43,15 @@ impl LocalShell {
         }
     }
 
-    pub fn signaled(&self) -> bool {
-        self.signaled
+    pub fn wait(&mut self) {
+        for process in &self.processes {
+            let mut lock = process.write().unwrap();
+            lock.wait_mut().print_error();
+        }
     }
 
-    pub fn thread_id(&self) -> &ThreadId {
-        &self.thread_id
+    pub fn signaled(&self) -> bool {
+        self.signaled
     }
 }
 

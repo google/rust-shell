@@ -60,7 +60,7 @@ impl ChildProcess {
         Ok(())
     }
 
-    fn wait_mut(&mut self) -> Result<(), ShellError> {
+    pub fn wait_mut(&mut self) -> Result<(), ShellError> {
         let mut data = match mem::replace(&mut self.0, None) {
             Some(data) => data,
             None => return Err(ShellError::NoSuchProcess)
