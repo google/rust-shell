@@ -6,6 +6,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::RwLock;
 use result::check_errno;
+use result::ShellResultExt;
 use std::process::Child;
 use std::process::Command;
 use local_shell::current_shell;
@@ -67,12 +68,7 @@ impl ChildProcess {
             Some(data) => data,
             None => return Err(ShellError::NoSuchProcess)
         };
-        let status = data.child.wait()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(ShellError::Status(status))
-        }
+        ShellResult::from_status(data.child.wait()?)
     }
 }
 
@@ -85,7 +81,7 @@ impl JobHandle {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();
         if lock.signaled() {
-            return Err(ShellError::Signaled(101))
+            return Err(ShellError::from_signal(101))
         }
         let child = command.spawn()?;
         let process = Arc::new(RwLock::new(
@@ -104,8 +100,7 @@ impl JobHandle {
     pub fn terminate(self) -> ShellResult {
         self.signal(libc::SIGTERM)?;
         match self.wait() {
-            Ok(()) | Err(ShellError::Code(_))
-                | Err(ShellError::Signaled(_)) => Ok(()),
+            Ok(()) | Err(ShellError::Status(_)) => Ok(()),
             err => err
         }
     }

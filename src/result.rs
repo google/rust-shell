@@ -7,17 +7,21 @@ use std::convert::From;
 use std::env;
 use std::io;
 use std::process::ExitStatus;
+use std::os::unix::process::ExitStatusExt;
 
 #[derive(Debug)]
 pub enum ShellError {
-    Code(u8),
-    Signaled(i32),
+    Status(ExitStatus),
     IoError(io::Error),
     VarError(env::VarError),
     Errno(&'static str, Errno),
-    Status(ExitStatus),
-    InvalidExecutable,
     NoSuchProcess,
+}
+
+impl ShellError {
+    pub fn from_signal(signal: u8) -> Self {
+        ShellError::Status(ExitStatus::from_raw(128 + signal as i32))
+    }
 }
 
 impl From<io::Error> for ShellError {
@@ -32,7 +36,7 @@ impl From<env::VarError> for ShellError {
     }
 }
 
-pub type ShellResult = ::std::result::Result<(), ShellError>;
+pub type ShellResult = Result<(), ShellError>;
 
 pub fn check_errno(name: &'static str,
                result: libc::c_int) -> Result<libc::c_int, ShellError> {
@@ -44,15 +48,35 @@ pub fn check_errno(name: &'static str,
 }
 
 pub trait ShellResultExt {
+    fn from_status(status: ExitStatus) -> Result<(), ShellError>;
+    fn status(self) -> Result<ExitStatus, ShellError>;
     fn code(&self) -> u8;
     fn print_error(self);
 }
 
-impl <T> ShellResultExt for ::std::result::Result<T, ShellError> {
+impl ShellResultExt for Result<(), ShellError> {
+    fn from_status(status: ExitStatus) -> Result<(), ShellError> {
+        if status.success() {
+            Ok(())
+        } else {
+            Err(ShellError::Status(status))
+        }
+    }
+
+    fn status(self) -> Result<ExitStatus, ShellError> {
+        match self {
+            Ok(_) => Ok(ExitStatus::from_raw(0)),
+            Err(ShellError::Status(status)) => Ok(status),
+            Err(error) => Err(error)
+        }
+    }
+
     fn code(&self) -> u8 {
         match self {
             &Ok(_) => 0,
-            &Err(ShellError::Code(code)) => code,
+            &Err(ShellError::Status(ref status)) => {
+                status.code().unwrap_or(1) as u8
+            },
             &Err(_) => 1
         }
     }
@@ -65,4 +89,10 @@ impl <T> ShellResultExt for ::std::result::Result<T, ShellError> {
             }
         }
     }
+}
+
+#[test]
+fn test_from_raw() {
+    let s = ExitStatus::from_raw(128 + 15);
+    assert_eq!(s.signal().unwrap(), 15);
 }

@@ -1,4 +1,3 @@
-#[macro_use] extern crate log;
 #[macro_use] extern crate shell;
 extern crate libc;
 extern crate env_logger;
