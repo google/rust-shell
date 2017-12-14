@@ -12,34 +12,27 @@ use std::process::Command;
 use local_shell::current_shell;
 
 #[derive(Debug)]
-struct ChildProcessData {
+pub struct ShellChildCore {
     child: Child,
     has_group: bool
 }
 
-#[derive(Debug)]
-pub struct ChildProcess(Option<ChildProcessData>);
-
-impl ChildProcess {
-    fn new(child: Child, has_group: bool) -> ChildProcess {
-        ChildProcess(Some(ChildProcessData {
+impl ShellChildCore {
+    fn new(child: Child, has_group: bool) -> ShellChildCore {
+        ShellChildCore {
             child: child,
             has_group: has_group
-        }))
+        }
     }
 
     pub fn signal(&self, sig: c_int) -> ShellResult {
-        let data = match &self.0 {
-            &Some(ref data) => data,
-            &None => return Err(ShellError::NoSuchProcess)
-        };
-        let kill_pid = if data.has_group {
-            -(data.child.id() as i32)
+        let kill_pid = if self.has_group {
+            -(self.child.id() as i32)
         } else {
-            data.child.id() as i32
+            self.child.id() as i32
         };
         
-        info!("Sending signal {} to {}", sig, data.child.id());
+        info!("Sending signal {} to {}", sig, self.child.id());
         unsafe {
             check_errno("kill", libc::kill(kill_pid, sig))?;
         }
@@ -47,34 +40,28 @@ impl ChildProcess {
     }
 
     pub fn wait_null(&self) -> ShellResult {
-        let data = match &self.0 {
-            &Some(ref data) => data,
-            &None => return Err(ShellError::NoSuchProcess)
-        };
         unsafe {
             let mut info = mem::uninitialized::<libc::siginfo_t>();
             check_errno("waitid",
                         libc::waitid(
                             libc::P_PID,
-                            data.child.id() as u32,
+                            self.child.id() as u32,
                             &mut info as *mut libc::siginfo_t,
                             libc::WEXITED | libc::WNOWAIT))?;
         }
         Ok(())
     }
 
-    pub fn wait_mut(&mut self) -> Result<(), ShellError> {
-        let mut data = match mem::replace(&mut self.0, None) {
-            Some(data) => data,
-            None => return Err(ShellError::NoSuchProcess)
-        };
-        ShellResult::from_status(data.child.wait()?)
+    pub fn wait(mut self) -> ShellResult {
+        ShellResult::from_status(self.child.wait()?)
     }
 }
 
+pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
+
 /// Job which is a process leader.
-/// This wraps Arc<RwLock<ChildProcess>> and provides helper functions.
-pub struct JobHandle(Arc<RwLock<ChildProcess>>);
+/// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
+pub struct JobHandle(ShellChildArc);
 
 impl JobHandle {
     pub fn new(mut command: Command, has_group: bool) 
@@ -86,7 +73,7 @@ impl JobHandle {
         }
         let child = command.spawn()?;
         let process = Arc::new(RwLock::new(
-                ChildProcess::new(child, has_group)));
+                Some(ShellChildCore::new(child, has_group))));
         lock.add_process(&process);
         Ok(JobHandle(process))
     }
@@ -94,7 +81,7 @@ impl JobHandle {
     pub fn signal(&self, signal: c_int) -> ShellResult {
         let process = &self.0;
         let process = process.read().unwrap();
-        process.signal(signal)
+        process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
     }
 
     /// Sends a SIGTERM to a process group, then wait a process leader.
@@ -110,7 +97,7 @@ impl JobHandle {
     pub fn wait(self) -> ShellResult {
         {
             let data = self.0.read().unwrap();
-            data.wait_null()?;
+            data.as_ref().ok_or(ShellError::NoSuchProcess)?.wait_null()?;
         }
         {
             let shell = current_shell();
@@ -118,6 +105,6 @@ impl JobHandle {
             lock.remove_process(&self.0);
         }
         let mut data = self.0.write().unwrap();
-        data.wait_mut()
+        data.take().ok_or(ShellError::NoSuchProcess)?.wait()
     }
 }

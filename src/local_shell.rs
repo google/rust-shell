@@ -1,21 +1,21 @@
-use job_handle::ChildProcess;
+use job_handle::ShellChildArc;
 use libc::c_int;
 use libc;
 use process_manager::PROCESS_MANAGER;
 use result::ShellResultExt;
+use result::ShellError;
 use std::any::Any;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::thread::ThreadId;
 use std::thread;
 
 /// Thread local shell.
 pub struct LocalShell {
-    processes: Vec<Arc<RwLock<ChildProcess>>>,
+    processes: Vec<ShellChildArc>,
     signaled: bool
 }
 
@@ -27,11 +27,11 @@ impl LocalShell {
         }
     }
 
-    pub fn add_process(&mut self, process: &Arc<RwLock<ChildProcess>>) {
+    pub fn add_process(&mut self, process: &ShellChildArc) {
         self.processes.push(process.clone());
     }
 
-    pub fn remove_process(&mut self, process: &Arc<RwLock<ChildProcess>>) {
+    pub fn remove_process(&mut self, process: &ShellChildArc) {
         self.processes.retain(|p| !Arc::ptr_eq(p, process));
     }
 
@@ -39,14 +39,16 @@ impl LocalShell {
         self.signaled = true;
         for process in &self.processes {
             let lock = process.read().unwrap();
-            lock.signal(signal).print_error();
+            lock.as_ref().ok_or(ShellError::NoSuchProcess)
+                .and_then(|p| p.signal(signal)).print_error();
         }
     }
 
     pub fn wait(&mut self) {
         for process in &self.processes {
             let mut lock = process.write().unwrap();
-            lock.wait_mut().print_error();
+            lock.take().ok_or(ShellError::NoSuchProcess)
+                .and_then(|p| p.wait()).print_error();
         }
     }
 
