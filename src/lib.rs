@@ -96,7 +96,7 @@ extern crate errno;
 
 #[macro_use] pub mod command;
 mod shell_child;
-mod job_spec;
+mod shell_command;
 mod process_manager;
 mod local_shell;
 pub mod result;

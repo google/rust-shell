@@ -4,14 +4,14 @@ use result::ShellError;
 use std::path::Path;
 use std::process::Command;
 
-pub struct JobSpec {
+pub struct ShellCommand {
     command: Command,
     has_group: bool
 }
 
-impl JobSpec {
-    pub fn new(command: Command) -> JobSpec {
-        JobSpec {
+impl ShellCommand {
+    pub fn new(command: Command) -> ShellCommand {
+        ShellCommand {
             command: command,
             has_group: false,
         }
@@ -40,9 +40,9 @@ impl JobSpec {
 }
 
 #[test]
-fn test_job_spec_2() {
+fn test_shell_command_2() {
     use std::process::Command;
     let mut command = Command::new("echo");
     command.arg("The command was run");
-    JobSpec::new(command).set_has_group();
+    ShellCommand::new(command).set_has_group();
 }

@@ -1,4 +1,4 @@
-use ::job_spec::JobSpec;
+use ::shell_command::ShellCommand;
 use ::nom::IResult;
 use std::process::Command;
 
@@ -47,13 +47,13 @@ fn parse_cmd<'a>(format: &'a str, args: &'a [&str]) -> Vec<&'a str> {
     new_args
 }
 
-pub fn new_command(format: &str, args: &[&str]) -> JobSpec {
+pub fn new_command(format: &str, args: &[&str]) -> ShellCommand {
     let vec = parse_cmd(format, args);
     let mut command = Command::new(vec[0]);
     if vec.len() > 1 {
         command.args(&vec[1..]);
     }
-    JobSpec::new(command)
+    ShellCommand::new(command)
 }
 
 
