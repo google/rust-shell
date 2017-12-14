@@ -1,4 +1,4 @@
-use job_handle::JobHandle;
+use shell_child::ShellChild;
 use result::ShellResult;
 use result::ShellError;
 use std::path::Path;
@@ -34,8 +34,8 @@ impl JobSpec {
         self.spawn().and_then(|job| job.wait())
     }
 
-    pub fn spawn(self) -> Result<JobHandle, ShellError> {
-        JobHandle::new(self.command, self.has_group)
+    pub fn spawn(self) -> Result<ShellChild, ShellError> {
+        ShellChild::new(self.command, self.has_group)
     }
 }
 

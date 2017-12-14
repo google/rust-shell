@@ -61,11 +61,11 @@ pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 
 /// Job which is a process leader.
 /// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
-pub struct JobHandle(ShellChildArc);
+pub struct ShellChild(ShellChildArc);
 
-impl JobHandle {
+impl ShellChild {
     pub fn new(mut command: Command, has_group: bool) 
-            -> Result<JobHandle, ShellError> {
+            -> Result<ShellChild, ShellError> {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();
         if lock.signaled() {
@@ -75,7 +75,7 @@ impl JobHandle {
         let process = Arc::new(RwLock::new(
                 Some(ShellChildCore::new(child, has_group))));
         lock.add_process(&process);
-        Ok(JobHandle(process))
+        Ok(ShellChild(process))
     }
 
     pub fn signal(&self, signal: c_int) -> ShellResult {

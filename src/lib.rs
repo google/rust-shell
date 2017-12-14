@@ -52,8 +52,8 @@
 //! ## Async control
 //!
 //! If you would like to run a command asynchronously, call async() instead of
-//! run(). async() returns JobHandler which you can use to kill or wait the
-//! running process. JobHandler automatically invokes wait() when it's dropped.
+//! run(). async() returns ShellChild which you can use to kill or wait the
+//! running process. ShellChild automatically invokes wait() when it's dropped.
 //! So you will not get a zombi process. You can explicitly detach a process
 //! from job handler by calling detach() if you want to.
 //!
@@ -95,7 +95,7 @@ extern crate libc;
 extern crate errno;
 
 #[macro_use] pub mod command;
-mod job_handle;
+mod shell_child;
 mod job_spec;
 mod process_manager;
 mod local_shell;

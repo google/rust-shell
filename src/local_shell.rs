@@ -1,4 +1,4 @@
-use job_handle::ShellChildArc;
+use shell_child::ShellChildArc;
 use libc::c_int;
 use libc;
 use process_manager::PROCESS_MANAGER;
