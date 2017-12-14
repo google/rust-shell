@@ -73,6 +73,7 @@ impl ChildProcess {
 }
 
 /// Job which is a process leader.
+/// This wraps Arc<RwLock<ChildProcess>> and provides helper functions.
 pub struct JobHandle(Arc<RwLock<ChildProcess>>);
 
 impl JobHandle {
@@ -106,22 +107,17 @@ impl JobHandle {
     }
 
     /// Wait for termination of the process.
-    pub fn wait(mut self) -> ShellResult {
-        self.wait_mut()
-    }
-
-    fn wait_mut(&mut self) -> ShellResult {
+    pub fn wait(self) -> ShellResult {
         {
             let data = self.0.read().unwrap();
             data.wait_null()?;
         }
         {
-            let mut data = self.0.write().unwrap();
-            data.wait_mut()?;
+            let shell = current_shell();
+            let mut lock = shell.lock().unwrap();
+            lock.remove_process(&self.0);
         }
-        let shell = current_shell();
-        let mut lock = shell.lock().unwrap();
-        lock.remove_process(&self.0);
-        Ok(())
+        let mut data = self.0.write().unwrap();
+        data.wait_mut()
     }
 }
