@@ -13,13 +13,16 @@ use local_shell::current_shell;
 
 #[derive(Debug)]
 pub struct ShellChildCore {
+    command_line: String,
     child: Child,
     has_group: bool
 }
 
 impl ShellChildCore {
-    fn new(child: Child, has_group: bool) -> ShellChildCore {
+    fn new(command_line: String, child: Child,
+           has_group: bool) -> ShellChildCore {
         ShellChildCore {
+            command_line: command_line,
             child: child,
             has_group: has_group
         }
@@ -53,7 +56,7 @@ impl ShellChildCore {
     }
 
     pub fn wait(mut self) -> ShellResult {
-        ShellResult::from_status(self.child.wait()?)
+        ShellResult::from_status(self.command_line, self.child.wait()?)
     }
 }
 
@@ -64,16 +67,16 @@ pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 pub struct ShellChild(ShellChildArc);
 
 impl ShellChild {
-    pub fn new(mut command: Command, has_group: bool) 
+    pub fn new(line: String, mut command: Command, has_group: bool) 
             -> Result<ShellChild, ShellError> {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();
         if lock.signaled() {
-            return Err(ShellError::from_signal(101))
+            return Err(ShellError::from_signal(line, 101))
         }
         let child = command.spawn()?;
         let process = Arc::new(RwLock::new(
-                Some(ShellChildCore::new(child, has_group))));
+                Some(ShellChildCore::new(line, child, has_group))));
         lock.add_process(&process);
         Ok(ShellChild(process))
     }
@@ -88,7 +91,7 @@ impl ShellChild {
     pub fn terminate(self) -> ShellResult {
         self.signal(libc::SIGTERM)?;
         match self.wait() {
-            Ok(()) | Err(ShellError::Status(_)) => Ok(()),
+            Ok(()) | Err(ShellError::Status(_, _)) => Ok(()),
             err => err
         }
     }

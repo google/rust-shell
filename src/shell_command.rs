@@ -5,13 +5,15 @@ use std::path::Path;
 use std::process::Command;
 
 pub struct ShellCommand {
+    line: String,
     command: Command,
     has_group: bool
 }
 
 impl ShellCommand {
-    pub fn new(command: Command) -> ShellCommand {
+    pub fn new(line: String, command: Command) -> ShellCommand {
         ShellCommand {
+            line: line,
             command: command,
             has_group: false,
         }
@@ -35,7 +37,7 @@ impl ShellCommand {
     }
 
     pub fn spawn(self) -> Result<ShellChild, ShellError> {
-        ShellChild::new(self.command, self.has_group)
+        ShellChild::new(self.line, self.command, self.has_group)
     }
 }
 
@@ -44,5 +46,6 @@ fn test_shell_command_2() {
     use std::process::Command;
     let mut command = Command::new("echo");
     command.arg("The command was run");
-    ShellCommand::new(command).set_has_group();
+    ShellCommand::new(String::from("echo The command was run"), command)
+        .set_has_group();
 }

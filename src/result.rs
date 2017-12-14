@@ -11,7 +11,7 @@ use std::os::unix::process::ExitStatusExt;
 
 #[derive(Debug)]
 pub enum ShellError {
-    Status(ExitStatus),
+    Status(String, ExitStatus),
     IoError(io::Error),
     VarError(env::VarError),
     Errno(&'static str, Errno),
@@ -19,8 +19,8 @@ pub enum ShellError {
 }
 
 impl ShellError {
-    pub fn from_signal(signal: u8) -> Self {
-        ShellError::Status(ExitStatus::from_raw(128 + signal as i32))
+    pub fn from_signal(command: String, signal: u8) -> Self {
+        ShellError::Status(command, ExitStatus::from_raw(128 + signal as i32))
     }
 }
 
@@ -48,25 +48,27 @@ pub fn check_errno(name: &'static str,
 }
 
 pub trait ShellResultExt {
-    fn from_status(status: ExitStatus) -> Result<(), ShellError>;
+    fn from_status(command: String, status: ExitStatus) 
+        -> Result<(), ShellError>;
     fn status(self) -> Result<ExitStatus, ShellError>;
     fn code(&self) -> u8;
     fn print_error(self);
 }
 
 impl ShellResultExt for Result<(), ShellError> {
-    fn from_status(status: ExitStatus) -> Result<(), ShellError> {
+    fn from_status(command: String, status: ExitStatus)
+            -> Result<(), ShellError> {
         if status.success() {
             Ok(())
         } else {
-            Err(ShellError::Status(status))
+            Err(ShellError::Status(command, status))
         }
     }
 
     fn status(self) -> Result<ExitStatus, ShellError> {
         match self {
             Ok(_) => Ok(ExitStatus::from_raw(0)),
-            Err(ShellError::Status(status)) => Ok(status),
+            Err(ShellError::Status(_, status)) => Ok(status),
             Err(error) => Err(error)
         }
     }
@@ -74,7 +76,7 @@ impl ShellResultExt for Result<(), ShellError> {
     fn code(&self) -> u8 {
         match self {
             &Ok(_) => 0,
-            &Err(ShellError::Status(ref status)) => {
+            &Err(ShellError::Status(_, ref status)) => {
                 status.code().unwrap_or(1) as u8
             },
             &Err(_) => 1

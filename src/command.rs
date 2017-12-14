@@ -53,7 +53,8 @@ pub fn new_command(format: &str, args: &[&str]) -> ShellCommand {
     if vec.len() > 1 {
         command.args(&vec[1..]);
     }
-    ShellCommand::new(command)
+    let line = vec.join(" ");
+    ShellCommand::new(line, command)
 }
 
 
