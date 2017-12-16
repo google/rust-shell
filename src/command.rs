@@ -14,9 +14,9 @@ fn token_char(ch: char) -> bool {
 
 fn var_char(ch: char) -> bool {
     match ch {
-        ch if ch as u8 >= 'a' as u8 && ch as u8 <= 'z' as u8 => true,
-        ch if ch as u8 >= 'A' as u8 && ch as u8 <= 'Z' as u8 => true,
-        ch if ch as u8 >= '0' as u8 && ch as u8 <= '9' as u8 => true,
+        'a' ... 'z' => true,
+        'A' ... 'Z' => true,
+        '0' ... '9' => true,
         '_' => true,
         _ => false,
     }
