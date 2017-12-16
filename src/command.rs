@@ -6,8 +6,8 @@ use std::env::VarError;
 
 fn token_char(ch: char) -> bool {
     match ch {
-        ch if ch as u8 <= 32 || 127 <= ch as u8 => false,
-        '"' | '\'' | '>' | '<' | '|' | ';' | '{' | '}' | '$' => false,
+        '\x00' ... '\x20' => false,
+        '\x7f' | '"' | '\'' | '>' | '<' | '|' | ';' | '{' | '}' | '$' => false,
         _ => true,
     }
 }
