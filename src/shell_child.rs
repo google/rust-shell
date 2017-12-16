@@ -34,7 +34,7 @@ impl ShellChildCore {
         } else {
             self.child.id() as i32
         };
-        
+
         info!("Sending signal {} to {}", sig, self.child.id());
         unsafe {
             check_errno("kill", libc::kill(kill_pid, sig))?;
@@ -67,7 +67,7 @@ pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 pub struct ShellChild(ShellChildArc);
 
 impl ShellChild {
-    pub fn new(line: String, mut command: Command, has_group: bool) 
+    pub fn new(line: String, mut command: Command, has_group: bool)
             -> Result<ShellChild, ShellError> {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();

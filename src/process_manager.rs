@@ -25,7 +25,7 @@ impl ProcessManager {
         }
     }
 
-    pub fn add_local_shell(&mut self, id: &ThreadId, 
+    pub fn add_local_shell(&mut self, id: &ThreadId,
                            shell: &Arc<Mutex<LocalShell>>) {
         self.children.insert(id.clone(), shell.clone());
     }

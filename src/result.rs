@@ -48,7 +48,7 @@ pub fn check_errno(name: &'static str,
 }
 
 pub trait ShellResultExt {
-    fn from_status(command: String, status: ExitStatus) 
+    fn from_status(command: String, status: ExitStatus)
         -> Result<(), ShellError>;
     fn status(self) -> Result<ExitStatus, ShellError>;
     fn code(&self) -> u8;
