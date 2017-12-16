@@ -5,6 +5,9 @@ use std::env;
 use std::env::VarError;
 
 fn token_char(ch: char) -> bool {
+    if ch.len_utf8() > 1 {
+        return false;
+    }
     match ch {
         '\x00' ... '\x20' => false,
         '\x7f' | '"' | '\'' | '>' | '<' | '|' | ';' | '{' | '}' | '$' => false,
