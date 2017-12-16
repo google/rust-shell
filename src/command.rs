@@ -12,6 +12,16 @@ fn token_char(ch: char) -> bool {
     }
 }
 
+fn var_char(ch: char) -> bool {
+    match ch {
+        ch if ch as u8 >= 'a' as u8 && ch as u8 <= 'z' as u8 => true,
+        ch if ch as u8 >= 'A' as u8 && ch as u8 <= 'Z' as u8 => true,
+        ch if ch as u8 >= '0' as u8 && ch as u8 <= '9' as u8 => true,
+        '_' => true,
+        _ => false,
+    }
+}
+
 enum TokenPart {
     Bare(String),
     Placeholder,
@@ -29,7 +39,10 @@ impl Token {
                 TokenPart::Bare(s) => token += &s,
                 TokenPart::Placeholder =>
                     token += args.next().expect("Too many placeholders"),
-                TokenPart::EnvVariable(name) => token += &env::var(name)?,
+                TokenPart::EnvVariable(name) => {
+                    debug!("Environment variable {}", name);
+                    token += &env::var(name)?
+                }
             }
         }
         Ok(token)
@@ -44,7 +57,7 @@ named!(quoted_token<&str, TokenPart>,
 named!(place_holder<&str, TokenPart>,
        map!(tag_s!("{}"), |_| TokenPart::Placeholder));
 named!(env_var<&str, TokenPart>,
-       map!(preceded!(tag!("$"), take_while1_s!(token_char)),
+       map!(preceded!(tag!("$"), take_while1_s!(var_char)),
             |name| TokenPart::EnvVariable(String::from(name))));
 named!(command_token<&str, Token>,
        map!(many1!(alt!(bare_token | quoted_token | place_holder | env_var)),
@@ -100,7 +113,9 @@ fn test_parse_cmd() {
 
 #[test]
 fn test_parse_cmd_env() {
+    use env_logger;
+    env_logger::init().unwrap();
     env::set_var("MY_VAR", "VALUE");
-    let tokens = parse_cmd("echo $MY_VAR", &[]).unwrap();
-    assert_eq!("VALUE", tokens[1]);
+    let tokens = parse_cmd("echo $MY_VAR/dir", &[]).unwrap();
+    assert_eq!("VALUE/dir", tokens[1]);
 }

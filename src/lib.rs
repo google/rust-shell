@@ -91,8 +91,10 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 #[macro_use] extern crate nom;
-extern crate libc;
 extern crate errno;
+extern crate libc;
+extern crate regex;
+extern crate env_logger;
 
 #[macro_use] pub mod command;
 mod shell_child;
