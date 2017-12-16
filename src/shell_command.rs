@@ -6,7 +6,7 @@ use std::process::Command;
 
 pub struct ShellCommand {
     line: String,
-    command: Command,
+    pub command: Command,
     has_group: bool
 }
 
@@ -42,10 +42,15 @@ impl ShellCommand {
 }
 
 #[test]
-fn test_shell_command_2() {
-    use std::process::Command;
-    let mut command = Command::new("echo");
-    command.arg("The command was run");
-    ShellCommand::new(String::from("echo The command was run"), command)
-        .set_has_group();
+fn test_shell_command() {
+    assert!(cmd!("test 1 = 1").run().is_ok());
+    assert!(cmd!("test 1 = 0").run().is_err());
+}
+
+#[test]
+fn test_shell_command_output() {
+    assert_eq!(
+        &String::from_utf8_lossy(&cmd!("echo Test").command.output()
+                                 .unwrap().stdout),
+        "Test\n");
 }
