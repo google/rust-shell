@@ -56,6 +56,7 @@ pub fn delegate_signal() -> ShellResult {
         }
 
         thread::spawn(move || {
+            info!("Start waitinig signal");
             let mut signal: c_int = 0;
             let result = libc::sigwait(
                 &sigset as *const sigset_t, &mut signal as *mut c_int);
@@ -63,6 +64,7 @@ pub fn delegate_signal() -> ShellResult {
                 eprintln!("sigwait failed {}", result);
                 return;
             }
+            info!("Signal {} is received", signal);
             let mut lock = PROCESS_MANAGER.lock().unwrap();
             let mut children = lock.children.drain().collect::<Vec<_>>();
             for &mut (_, ref entry) in &mut children {
