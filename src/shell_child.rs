@@ -15,7 +15,7 @@ use std::io::Read;
 #[derive(Debug)]
 pub struct ShellChildCore {
     command_line: String,
-    child: Child,
+    pub child: Child,
     has_group: bool
 }
 
@@ -65,7 +65,7 @@ pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 
 /// Job which is a process leader.
 /// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
-pub struct ShellChild(ShellChildArc);
+pub struct ShellChild(pub ShellChildArc);
 
 impl ShellChild {
     pub fn new(line: String, mut command: Command, has_group: bool)
