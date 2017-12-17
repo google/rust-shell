@@ -10,6 +10,7 @@ use result::ShellResultExt;
 use std::process::Child;
 use std::process::Command;
 use local_shell::current_shell;
+use std::io::Read;
 
 #[derive(Debug)]
 pub struct ShellChildCore {
@@ -109,5 +110,16 @@ impl ShellChild {
         }
         let mut data = self.0.write().unwrap();
         data.take().ok_or(ShellError::NoSuchProcess)?.wait()
+    }
+
+    pub fn stdout_utf8(self) -> Result<String, ShellError> {
+        let mut string = String::new();
+        {
+            let mut lock = self.0.write().unwrap();
+            let lock = lock.as_mut().ok_or(ShellError::NoSuchProcess)?;
+            lock.child.stdout.as_mut().unwrap().read_to_string(&mut string)?;
+        }
+        self.wait()?;
+        Ok(string)
     }
 }

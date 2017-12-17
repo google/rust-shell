@@ -3,6 +3,7 @@ use result::ShellResult;
 use result::ShellError;
 use std::path::Path;
 use std::process::Command;
+use std::process::Stdio;
 
 pub struct ShellCommand {
     line: String,
@@ -39,6 +40,11 @@ impl ShellCommand {
     pub fn spawn(self) -> Result<ShellChild, ShellError> {
         ShellChild::new(self.line, self.command, self.has_group)
     }
+
+    pub fn stdout_utf8(mut self) -> Result<String, ShellError> {
+        self.command.stdout(Stdio::piped());
+        self.spawn()?.stdout_utf8()
+    }
 }
 
 #[test]
@@ -49,8 +55,7 @@ fn test_shell_command() {
 
 #[test]
 fn test_shell_command_output() {
-    assert_eq!(
-        &String::from_utf8_lossy(&cmd!("echo Test").command.output()
-                                 .unwrap().stdout),
-        "Test\n");
+    assert_eq!(&String::from_utf8_lossy(
+        &cmd!("echo Test").command.output().unwrap().stdout), "Test\n");
+    assert_eq!(cmd!("echo Test").stdout_utf8().unwrap(), "Test\n");
 }
