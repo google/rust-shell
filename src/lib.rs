@@ -1,4 +1,4 @@
-//! # Rushell - shell script in rust.
+//! # Rust shell - shell script in rust.
 //!
 //! Rushell is a helper library for std::process::Command, which allows you to
 //! write a shell script helps you to write a shell script in rust.

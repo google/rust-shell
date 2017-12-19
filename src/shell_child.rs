@@ -82,13 +82,14 @@ impl ShellChild {
         Ok(ShellChild(process))
     }
 
+    /// Sends a signal to the process.
     pub fn signal(&self, signal: c_int) -> ShellResult {
         let process = &self.0;
         let process = process.read().unwrap();
         process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
     }
 
-    /// Sends a SIGTERM to a process group, then wait a process leader.
+    /// Sends a SIGTERM to a process, then wait for wait.
     pub fn terminate(self) -> ShellResult {
         self.signal(libc::SIGTERM)?;
         match self.wait() {
