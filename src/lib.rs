@@ -86,7 +86,6 @@
 //! job.terminate().unwrap().is_err();
 //! # }
 //! ```
-//!
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
@@ -104,4 +103,4 @@ mod local_shell;
 pub mod result;
 
 pub use local_shell::spawn;
-pub use process_manager::delegate_signal;
+pub use process_manager::trap_signal_and_wait_children;

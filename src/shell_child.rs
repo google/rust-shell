@@ -89,7 +89,7 @@ impl ShellChild {
         process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
     }
 
-    /// Sends a SIGTERM to a process, then wait for wait.
+    /// Sends a SIGTERM to a process, then wait for exit.
     pub fn terminate(self) -> ShellResult {
         self.signal(libc::SIGTERM)?;
         match self.wait() {
@@ -98,7 +98,7 @@ impl ShellChild {
         }
     }
 
-    /// Wait for termination of the process.
+    /// Waits for termination of the process.
     pub fn wait(self) -> ShellResult {
         {
             let data = self.0.read().unwrap();
@@ -113,6 +113,8 @@ impl ShellChild {
         data.take().ok_or(ShellError::NoSuchProcess)?.wait()
     }
 
+    /// Obtains stdout as utf8 string.
+    /// Returns Err if it returns non-zero exit code.
     pub fn stdout_utf8(self) -> Result<String, ShellError> {
         let mut string = String::new();
         {

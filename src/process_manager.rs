@@ -35,9 +35,13 @@ impl ProcessManager {
     }
 }
 
-/// Delegates SIGINT and SIGTERM to child processes.
+/// Traps SIGINT and SIGTERM, waits for child process completion, and exits
+/// the current process.
+///
+/// It must be invoked before any thread is launched, because it internally
+/// uses pthread_sigmask.
 #[allow(dead_code)]
-pub fn delegate_signal() -> ShellResult {
+pub fn trap_signal_and_wait_children() -> ShellResult {
     unsafe {
         let mut sigset = mem::uninitialized::<sigset_t>();
         check_errno("sigemptyset",
@@ -67,10 +71,7 @@ pub fn delegate_signal() -> ShellResult {
             info!("Signal {} is received", signal);
             let mut lock = PROCESS_MANAGER.lock().unwrap();
             let mut children = lock.children.drain().collect::<Vec<_>>();
-            for &mut (_, ref entry) in &mut children {
-                let mut lock = entry.lock().unwrap();
-                lock.signal(signal);
-            }
+            info!("Wait for {} child processes exiting", children.len());
             for &mut (_, ref entry) in &mut children {
                 let mut lock = entry.lock().unwrap();
                 lock.wait();

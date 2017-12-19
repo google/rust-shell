@@ -65,7 +65,7 @@ fn test_signal_before_run() {
 }
 
 #[test]
-fn test_delegate_signal() {
+fn test_trap_signal_and_wait_children() {
     setup();
     let result = unsafe {
         let result = libc::fork();
@@ -73,8 +73,7 @@ fn test_delegate_signal() {
         result
     };
     if result == 0 {
-        shell::delegate_signal().unwrap();
-        cmd!("sleep 5").spawn().unwrap();
+        shell::trap_signal_and_wait_children().unwrap();
         unsafe {
             assert_eq!(libc::kill(libc::getpid(), libc::SIGTERM), 0);
         }
