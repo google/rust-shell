@@ -3,10 +3,6 @@ name = "shell"
 version = "0.1.0"
 authors = ["Daichi Hirono <hidachinoiro@gmail.com>"]
 
-[[bin]]
-name = "runtest"
-path = "src/runtest.rs"
-
 [dependencies]
 errno = "*"
 lazy_static = "1.0"
