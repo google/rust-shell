@@ -14,7 +14,4 @@ libc = "0.2"
 log = "0.3.8"
 regex = "0.2"
 env_logger = "0.4.3"
-
-[dependencies.nom]
-version = "^3.2"
-features = ["regexp"]
+nom = "3.2"
