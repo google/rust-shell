@@ -69,11 +69,13 @@ named!(command_token<&str, Token>,
 named!(command< &str, Vec<Token> >,
        terminated!(ws!(many1!(command_token)), eof!()));
 
+/// Creates a new commadn from `format` and `args`
+/// # Examples
 #[macro_export]
 macro_rules! cmd {
-    ($format:expr) => ($crate::command::new_command($format, &[]).unwrap());
+    ($format:expr) => ($crate::new_command($format, &[]).unwrap());
     ($format:expr, $($arg:expr),+) =>
-        ($crate::command::new_command($format, &[$($arg),+]).unwrap());
+        ($crate::new_command($format, &[$($arg),+]).unwrap());
 }
 
 fn parse_cmd<'a>(format: &'a str, args: &'a [&str])
@@ -89,6 +91,8 @@ fn parse_cmd<'a>(format: &'a str, args: &'a [&str])
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Creates a new command from `format` and `args`.
+/// The function is invoked from `cmd!` macro internally.
 pub fn new_command(format: &str, args: &[&str])
         -> Result<ShellCommand, VarError> {
     let vec = parse_cmd(format, args)?;

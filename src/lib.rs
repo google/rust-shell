@@ -95,12 +95,17 @@ extern crate libc;
 extern crate regex;
 extern crate env_logger;
 
-#[macro_use] pub mod command;
+#[macro_use] mod command;
 mod shell_child;
 mod shell_command;
 mod process_manager;
 mod local_shell;
-pub mod result;
+mod result;
 
+pub use command::new_command;
 pub use local_shell::spawn;
 pub use process_manager::trap_signal_and_wait_children;
+pub use result::ShellResult;
+pub use shell_child::ShellChild;
+pub use shell_child::ShellChildCore;
+pub use shell_command::ShellCommand;

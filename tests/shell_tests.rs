@@ -4,7 +4,7 @@ extern crate env_logger;
 
 use std::thread;
 use std::time::Duration;
-use shell::result::ShellResult;
+use shell::ShellResult;
 use libc::c_int;
 
 fn setup() {
