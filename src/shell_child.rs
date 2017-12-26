@@ -56,7 +56,6 @@ impl ShellChildCore {
 
 pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 
-/// Job which is a process leader.
 /// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
 pub struct ShellChild(pub ShellChildArc);
 
