@@ -54,9 +54,21 @@ impl ShellChildCore {
     }
 }
 
+/// Arc holding `ShellChildCore`.
+///
+/// This is a combination of the following types.
+///
+///  - `Arc` to make it accessbile by mutliple threads. (e.g.
+///    the thread launched the `ShellChildCore` and the thread sending a signal
+///    via `ShellHandle`.
+///  - `RwLock` to `signal()` while `wait_null()` is blocking. Both `signal()`
+///    and `wait_null()` reguires the read lock which can be obtained by
+///    multiple threads at the same time.
+///  - `Option` to enable to `take()` ownership of `ShellChildCore` to inovke
+///    `wait()`.
 pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 
-/// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
+/// This wraps `ShellChildArc` and provides helper functions.
 pub struct ShellChild(pub ShellChildArc);
 
 impl ShellChild {
