@@ -1,16 +1,16 @@
 use libc::c_int;
 use libc;
+use local_shell::current_shell;
 use result::ShellError;
 use result::ShellResult;
-use std::mem;
-use std::sync::Arc;
-use std::sync::RwLock;
-use result::check_errno;
 use result::ShellResultExt;
+use result::check_errno;
+use std::io::Read;
+use std::mem;
 use std::process::Child;
 use std::process::Command;
-use local_shell::current_shell;
-use std::io::Read;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct ShellChildCore {
@@ -26,12 +26,8 @@ impl ShellChildCore {
         }
     }
 
-    pub fn signal(&self, sig: c_int) -> ShellResult {
-        let kill_pid = if self.has_group {
-            -(self.child.id() as i32)
-        } else {
-            self.child.id() as i32
-        };
+    pub fn signal(&self, sig: c_int) -> Result<(), ShellError> {
+        let kill_pid = self.child.id() as i32;
 
         info!("Sending signal {} to {}", sig, self.child.id());
         unsafe {
@@ -40,7 +36,7 @@ impl ShellChildCore {
         Ok(())
     }
 
-    pub fn wait_null(&self) -> ShellResult {
+    pub fn wait_null(&self) -> Result<(), ShellError> {
         unsafe {
             let mut info = mem::uninitialized::<libc::siginfo_t>();
             check_errno("waitid",
@@ -74,13 +70,13 @@ impl ShellChild {
         }
         let child = command.spawn()?;
         let process = Arc::new(RwLock::new(
-                Some(ShellChildCore::new(line, child, has_group))));
+                Some(ShellChildCore::new(line, child))));
         lock.add_process(&process);
         Ok(ShellChild(process))
     }
 
     /// Sends a signal to the process.
-    pub fn signal(&self, signal: c_int) -> ShellResult {
+    pub fn signal(&self, signal: c_int) -> Result<(), ShellError> {
         let process = &self.0;
         let process = process.read().unwrap();
         process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
@@ -92,13 +88,17 @@ impl ShellChild {
             let data = self.0.read().unwrap();
             data.as_ref().ok_or(ShellError::NoSuchProcess)?.wait_null()?;
         }
+        let result = {
+            let mut data = self.0.write().unwrap();
+            data.take().ok_or(ShellError::NoSuchProcess)
+                .and_then(|c| c.wait())
+        };
         {
             let shell = current_shell();
             let mut lock = shell.lock().unwrap();
             lock.remove_process(&self.0);
         }
-        let mut data = self.0.write().unwrap();
-        data.take().ok_or(ShellError::NoSuchProcess)?.wait()
+        result
     }
 
     /// Obtains stdout as utf8 string.

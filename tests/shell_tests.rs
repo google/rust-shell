@@ -36,8 +36,7 @@ fn test_kill_all_after_wait() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
         cmd!("sleep 0.05").run()?;
-        cmd!("sleep 2").run()?;
-        Ok(())
+        cmd!("sleep 2").run()
     });
     thread::sleep(Duration::from_millis(100));
     job.signal(libc::SIGTERM);
@@ -48,8 +47,7 @@ fn test_kill_all_after_wait() {
 fn test_kill_thread_job() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
-        cmd!("sleep 5").run()?;
-        Ok(())
+        cmd!("sleep 5").run()
     });
     thread::sleep(Duration::from_millis(100));
     job.signal(libc::SIGTERM);
@@ -61,8 +59,7 @@ fn test_signal_before_run() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
         thread::sleep(Duration::from_millis(100));
-        cmd!("sleep 1").run()?;
-        Ok(())
+        cmd!("sleep 1").run()
     });
     job.signal(libc::SIGTERM);
     assert!(job.join().unwrap().is_err());

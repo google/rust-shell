@@ -1,9 +1,6 @@
 use shell_child::ShellChildArc;
 use libc::c_int;
-use libc;
 use process_manager::PROCESS_MANAGER;
-use result::ShellResultExt;
-use result::ShellError;
 use std::any::Any;
 use std::cell::RefCell;
 use std::ops::Deref;
@@ -39,16 +36,22 @@ impl LocalShell {
         self.signaled = true;
         for process in &self.processes {
             let lock = process.read().unwrap();
-            lock.as_ref().ok_or(ShellError::NoSuchProcess)
-                .and_then(|p| p.signal(signal)).print_error();
+            if let Some(child) = lock.as_ref() {
+                if let Err(error) = child.signal(signal) {
+                    error!("Failed to send a signal {:?}", error);
+                }
+            }
         }
     }
 
     pub fn wait(&mut self) {
         for process in &self.processes {
             let mut lock = process.write().unwrap();
-            lock.take().ok_or(ShellError::NoSuchProcess)
-                .and_then(|p| p.wait()).print_error();
+            if let Some(child) = lock.take() {
+                if let Err(error) = child.wait() {
+                    error!("Failed to wait process {:?}", error);
+                }
+            }
         }
     }
 
