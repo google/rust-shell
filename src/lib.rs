@@ -169,6 +169,7 @@ pub use command::new_command;
 pub use local_shell::ShellHandle;
 pub use local_shell::spawn;
 pub use process_manager::trap_signal_and_wait_children;
+pub use result::ShellError;
 pub use result::ShellResult;
 pub use result::ShellResultExt;
 pub use shell_child::ShellChild;
