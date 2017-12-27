@@ -82,7 +82,7 @@
 //! # }
 //! ```
 //!
-//! # Threading
+//! ## Thread
 //!
 //! If you would like to run a sequence of commands asynchronously,
 //! `shell::spawn` creates a thread as well as `std::thread::spawn` but it
@@ -109,7 +109,7 @@
 //! # }
 //! ```
 //!
-//! # Signal handling
+//! ## Signal handling
 //!
 //! `trap_signal_and_wait_children()` starts watching SIGINT and SIGTERM, and
 //! waits all child processes before exiting the process when receiving these
@@ -120,7 +120,7 @@
 //! shell::trap_signal_and_wait_children().unwrap();
 //! ```
 //!
-//! # Access underlaying objects
+//! ## Access underlaying objects
 //!
 //! `ShellComamnd` wraps `std::process::Command` and `ShellChild` wraps
 //! `std::process::Child`. Both underlaying objects are accessible via public
@@ -149,6 +149,10 @@
 //! }
 //! shell_child.wait().unwrap();
 //! # }
+//! ```
+//!
+//! ## License
+//! Apatch 2 License
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
