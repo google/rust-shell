@@ -16,16 +16,13 @@ use std::io::Read;
 pub struct ShellChildCore {
     command_line: String,
     pub child: Child,
-    has_group: bool
 }
 
 impl ShellChildCore {
-    fn new(command_line: String, child: Child,
-           has_group: bool) -> ShellChildCore {
+    fn new(command_line: String, child: Child) -> ShellChildCore {
         ShellChildCore {
             command_line: command_line,
             child: child,
-            has_group: has_group
         }
     }
 
@@ -68,7 +65,7 @@ pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 pub struct ShellChild(pub ShellChildArc);
 
 impl ShellChild {
-    pub fn new(line: String, mut command: Command, has_group: bool)
+    pub fn new(line: String, mut command: Command)
             -> Result<ShellChild, ShellError> {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();
