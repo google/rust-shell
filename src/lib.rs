@@ -177,5 +177,6 @@ pub use result::ShellError;
 pub use result::ShellResult;
 pub use result::ShellResultExt;
 pub use shell_child::ShellChild;
+pub use shell_child::ShellChildArc;
 pub use shell_child::ShellChildCore;
 pub use shell_command::ShellCommand;
