@@ -93,11 +93,6 @@ impl <T> ShellHandle<T> {
         lock.signal(signal);
     }
 
-    pub fn terminate(self) -> Result<T, Box<Any + Send + 'static>> {
-        self.signal(libc::SIGTERM);
-        self.join_handle.join()
-    }
-
     pub fn join(self) -> Result<T, Box<Any + Send + 'static>> {
         self.join_handle.join()
     }

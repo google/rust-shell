@@ -89,15 +89,6 @@ impl ShellChild {
         process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
     }
 
-    /// Sends a SIGTERM to a process, then wait for exit.
-    pub fn terminate(self) -> ShellResult {
-        self.signal(libc::SIGTERM)?;
-        match self.wait() {
-            Ok(()) | Err(ShellError::Status(_, _)) => Ok(()),
-            err => err
-        }
-    }
-
     /// Waits for termination of the process.
     pub fn wait(self) -> ShellResult {
         {

@@ -26,7 +26,8 @@ fn test_subshell_kill_child() {
     thread::sleep(Duration::from_millis(100));
     // Stop outputting process group.
     assert!(cmd!("pgrep sleep").run().is_ok());
-    assert!(job.terminate().is_ok());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
     assert!(cmd!("pgrep sleep").run().is_err());
 }
 
@@ -39,7 +40,8 @@ fn test_kill_all_after_wait() {
         Ok(())
     });
     thread::sleep(Duration::from_millis(100));
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]
@@ -50,7 +52,8 @@ fn test_kill_thread_job() {
         Ok(())
     });
     thread::sleep(Duration::from_millis(100));
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]
@@ -61,7 +64,8 @@ fn test_signal_before_run() {
         cmd!("sleep 1").run()?;
         Ok(())
     });
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]
