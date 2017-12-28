@@ -57,6 +57,11 @@ pub fn check_errno(name: &'static str,
     }
 }
 
+/// Returns `ShellResult` which is `Ok`.
+pub fn ok() -> ShellResult {
+    Ok(SuccessfulExit(PhantomData::default()))
+}
+
 pub trait ShellResultExt {
     fn from_status(command: String, status: ExitStatus) -> Self;
     fn status(self) -> Result<ExitStatus, ShellError>;

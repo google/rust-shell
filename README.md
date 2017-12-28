@@ -37,7 +37,8 @@ use shell::ShellResult;
 
 fn shell_function() -> ShellResult {
   cmd!("echo Command A").run()?;
-  cmd!("echo Command B").run()
+  cmd!("echo Command B").run()?;
+  shell::ok()
 }
 ```
 
