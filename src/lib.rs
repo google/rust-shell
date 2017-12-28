@@ -16,6 +16,8 @@
 
 //! # Rust shell - shell script written in rust.
 //!
+//! This is not an officially supported Google product
+//!
 //! Rust shell is a helper library for std::process::Command to write shell
 //! script like tasks in rust. The library only works with unix-like operation
 //! systems.
