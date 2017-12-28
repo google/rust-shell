@@ -16,41 +16,34 @@
 
 use libc::c_int;
 use libc;
+use local_shell::current_shell;
 use result::ShellError;
 use result::ShellResult;
-use std::mem;
-use std::sync::Arc;
-use std::sync::RwLock;
-use result::check_errno;
 use result::ShellResultExt;
+use result::check_errno;
+use std::io::Read;
+use std::mem;
 use std::process::Child;
 use std::process::Command;
-use local_shell::current_shell;
-use std::io::Read;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct ShellChildCore {
     command_line: String,
     pub child: Child,
-    has_group: bool
 }
 
 impl ShellChildCore {
-    fn new(command_line: String, child: Child,
-           has_group: bool) -> ShellChildCore {
+    fn new(command_line: String, child: Child) -> ShellChildCore {
         ShellChildCore {
             command_line: command_line,
             child: child,
-            has_group: has_group
         }
     }
 
-    pub fn signal(&self, sig: c_int) -> ShellResult {
-        let kill_pid = if self.has_group {
-            -(self.child.id() as i32)
-        } else {
-            self.child.id() as i32
-        };
+    pub fn signal(&self, sig: c_int) -> Result<(), ShellError> {
+        let kill_pid = self.child.id() as i32;
 
         info!("Sending signal {} to {}", sig, self.child.id());
         unsafe {
@@ -59,7 +52,7 @@ impl ShellChildCore {
         Ok(())
     }
 
-    pub fn wait_null(&self) -> ShellResult {
+    pub fn wait_null(&self) -> Result<(), ShellError> {
         unsafe {
             let mut info = mem::uninitialized::<libc::siginfo_t>();
             check_errno("waitid",
@@ -77,14 +70,25 @@ impl ShellChildCore {
     }
 }
 
+/// Arc holding `ShellChildCore`.
+///
+/// This is a combination of the following types.
+///
+///  - `Arc` to make it accessbile by mutliple threads. (e.g.
+///    the thread launched the `ShellChildCore` and the thread sending a signal
+///    via `ShellHandle`.
+///  - `RwLock` to `signal()` while `wait_null()` is blocking. Both `signal()`
+///    and `wait_null()` reguires the read lock which can be obtained by
+///    multiple threads at the same time.
+///  - `Option` to enable to `take()` ownership of `ShellChildCore` to inovke
+///    `wait()`.
 pub type ShellChildArc = Arc<RwLock<Option<ShellChildCore>>>;
 
-/// Job which is a process leader.
-/// This wraps Arc<RwLock<ShellChildCore>> and provides helper functions.
+/// This wraps `ShellChildArc` and provides helper functions.
 pub struct ShellChild(pub ShellChildArc);
 
 impl ShellChild {
-    pub fn new(line: String, mut command: Command, has_group: bool)
+    pub fn new(line: String, mut command: Command)
             -> Result<ShellChild, ShellError> {
         let shell = current_shell();
         let mut lock = shell.lock().unwrap();
@@ -93,25 +97,16 @@ impl ShellChild {
         }
         let child = command.spawn()?;
         let process = Arc::new(RwLock::new(
-                Some(ShellChildCore::new(line, child, has_group))));
+                Some(ShellChildCore::new(line, child))));
         lock.add_process(&process);
         Ok(ShellChild(process))
     }
 
     /// Sends a signal to the process.
-    pub fn signal(&self, signal: c_int) -> ShellResult {
+    pub fn signal(&self, signal: c_int) -> Result<(), ShellError> {
         let process = &self.0;
         let process = process.read().unwrap();
         process.as_ref().ok_or(ShellError::NoSuchProcess)?.signal(signal)
-    }
-
-    /// Sends a SIGTERM to a process, then wait for exit.
-    pub fn terminate(self) -> ShellResult {
-        self.signal(libc::SIGTERM)?;
-        match self.wait() {
-            Ok(()) | Err(ShellError::Status(_, _)) => Ok(()),
-            err => err
-        }
     }
 
     /// Waits for termination of the process.
@@ -120,13 +115,17 @@ impl ShellChild {
             let data = self.0.read().unwrap();
             data.as_ref().ok_or(ShellError::NoSuchProcess)?.wait_null()?;
         }
+        let result = {
+            let mut data = self.0.write().unwrap();
+            data.take().ok_or(ShellError::NoSuchProcess)
+                .and_then(|c| c.wait())
+        };
         {
             let shell = current_shell();
             let mut lock = shell.lock().unwrap();
             lock.remove_process(&self.0);
         }
-        let mut data = self.0.write().unwrap();
-        data.take().ok_or(ShellError::NoSuchProcess)?.wait()
+        result
     }
 
     /// Obtains stdout as utf8 string.

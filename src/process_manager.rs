@@ -24,7 +24,6 @@ use local_shell::LocalShell;
 use std::collections::HashMap;
 use result::check_errno;
 use result::ShellError;
-use result::ShellResult;
 use std::mem;
 use errno::Errno;
 use std::thread;
@@ -57,7 +56,7 @@ impl ProcessManager {
 /// It must be invoked before any thread is launched, because it internally
 /// uses pthread_sigmask.
 #[allow(dead_code)]
-pub fn trap_signal_and_wait_children() -> ShellResult {
+pub fn trap_signal_and_wait_children() -> Result<(), ShellError> {
     unsafe {
         let mut sigset = mem::uninitialized::<sigset_t>();
         check_errno("sigemptyset",

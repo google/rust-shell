@@ -14,94 +14,161 @@
  * limitations under the License.
  */
 
-//! # Rust shell - shell script in rust.
+//! # Rust shell - shell script written in rust.
 //!
-//! Rushell is a helper library for std::process::Command, which allows you to
-//! write a shell script helps you to write a shell script in rust.
+//! Rust shell is a helper library for std::process::Command to write shell
+//! script like tasks in rust. The library only works with unix-like operation
+//! systems.
 //!
-//! ## cmd! macro
+//! ## Run command
 //!
-//! You can easiliy create Command instance by using cmd! macro.
-//!
-//! ```
-//! #[macro_use] extern crate shell;
-//! fn main() {
-//!   let command = cmd!("echo test");
-//! }
-//! ```
-//!
-//! You can specify an argument by using rust value as well.
+//! `run!` macro creates a ShellCommand instance which you can run by `run()`
+//! method.
 //!
 //! ```
 //! #[macro_use] extern crate shell;
+//!
 //! # fn main() {
-//!   let name = "John";
-//!   let command = cmd!("echo My name is {}.", name);
+//! // Run command by cmd! macro
+//! cmd!("echo Hello rust shell!").run().unwrap();
+//!
+//! // Contain white space or non-alphabetical characters
+//! cmd!("echo \"%$#\"").run().unwrap();
+//!
+//! // Pass an argument
+//! let name = "shell";
+//! cmd!("echo Hello rust {}!", name).run().unwrap();
+//!
+//! // Extract environment variable
+//! cmd!("echo HOME is $HOME").run().unwrap();
 //! # }
 //! ```
+//! ## ShellResult
 //!
-//! ## Running command
-//!
-//! Rushell adds run() method to Command, which returns ShellResult.  Because
-//! ShellResult regards exit code 0 is Ok and others are Err, you can easily
-//! check an error with try operator (?).
-//!
+//! The return value of `ShellCommand#run()` is `ShellResult` which is `Ok(_)`
+//! only when the command successfully runs and its execution code is 0, so you
+//! can use `?` operator to check if the command successfully exits or not.
 //!
 //! ```
 //! #[macro_use] extern crate shell;
-//! # use shell::result::ShellResult;
-//! fn my_shell_script() -> ShellResult {
-//!   cmd!("echo test").run()?;
-//!   cmd!("echo test").run()?;
-//!   Ok(())
-//! }
+//! use shell::ShellResult;
+//!
 //! # fn main() {
-//! #   my_shell_script().unwrap();
+//! #   shell_function().unwrap();
 //! # }
+//! fn shell_function() -> ShellResult {
+//!   cmd!("echo Command A").run()?;
+//!   cmd!("echo Command B").run()
+//! }
 //! ```
 //!
 //! ## Output string
 //!
-//! output_utf8() and error_utf8() can be used to run command and returns
-//! String.
-//!
-//! ## Async control
-//!
-//! If you would like to run a command asynchronously, call async() instead of
-//! run(). async() returns ShellChild which you can use to kill or wait the
-//! running process. ShellChild automatically invokes wait() when it's dropped.
-//! So you will not get a zombi process. You can explicitly detach a process
-//! from job handler by calling detach() if you want to.
-//!
-//! ```test
-//! #[macro_use] extern crate shell;
-//! # use shell::result::ShellResult;
-//! # fn main() {
-//! # fn body() -> ShellResult {
-//! let job = cmd!("sleep 100").spawn()?;
-//! job.wait();
-//! # Ok(())
-//! # }
-//! # body();
-//! # }
-//! ```
-//!
-//! # Threading
-//!
-//! You can create a subshell by spawning a new thread.
+//! ShellCommand has a shorthand to obtain stdout as UTF8 string.
 //!
 //! ```
 //! #[macro_use] extern crate shell;
-//! # use shell::result::ShellResult;
+//!
 //! # fn main() {
-//! let job = shell::spawn(|| -> ShellResult {
-//!   cmd!("sleep 3").run()?;
-//!   Ok(())
+//! assert_eq!(cmd!("echo OK").stdout_utf8().unwrap(), "OK\n");
+//! # }
+//! ```
+//!
+//! ## Spawn
+//!
+//! ShellCommand has `spawn()` method which runs the command asynchronously and
+//! returns `ShellChild`.
+//!
+//! ```
+//! #[macro_use] extern crate shell;
+//! extern crate libc;
+//! use shell::ShellResultExt;
+//!
+//! # fn main() {
+//! // Wait
+//! let child = cmd!("sleep 2").spawn().unwrap();
+//! child.wait().unwrap();
+//!
+//! // Signal
+//! let child = cmd!("sleep 2").spawn().unwrap();
+//! child.signal(libc::SIGINT);
+//! let result = child.wait();
+//! assert!(result.is_err(), "Should be error as it exits with a signal");
+//! assert!(result.status().is_ok(), "Still able to obtain status");
+//! # }
+//! ```
+//!
+//! ## Thread
+//!
+//! If you would like to run a sequence of commands asynchronously,
+//! `shell::spawn` creates a thread as well as `std::thread::spawn` but it
+//! returns `ShellHandle` wrapping `std::thread::JoinHandle`.
+//!
+//! `ShellHandle#signal()` is used to send a signal to processes running on the
+//! thread.  It also stops launching a new process by `ShellComamnd::run()` on
+//! that thread.
+//!
+//! ```
+//! #[macro_use] extern crate shell;
+//! extern crate libc;
+//! use shell::ShellResult;
+//! use shell::ShellResultExt;
+//!
+//! # fn main() {
+//! let handle = shell::spawn(|| -> ShellResult {
+//!   cmd!("sleep 3").run()
 //! });
-//!
-//! job.terminate().unwrap().is_err();
+//! handle.signal(libc::SIGINT);
+//! let result = handle.join().unwrap();
+//! assert!(result.is_err(), "Should be error as it exits with a signal");
+//! assert!(result.status().is_ok(), "Still able to obtain status");
 //! # }
 //! ```
+//!
+//! ## Signal handling
+//!
+//! `trap_signal_and_wait_children()` starts watching SIGINT and SIGTERM, and
+//! waits all child processes before exiting the process when receiving these
+//! signals. The function needs to be called before launching any new thread.
+//!
+//! ```
+//! extern crate shell;
+//! shell::trap_signal_and_wait_children().unwrap();
+//! ```
+//!
+//! ## Access underlaying objects
+//!
+//! `ShellComamnd` wraps `std::process::Command` and `ShellChild` wraps
+//! `std::process::Child`. Both underlaying objects are accessible via public
+//! fields.
+//!
+//! ```
+//! #[macro_use] extern crate shell;
+//! use std::process::Stdio;
+//! use std::io::Read;
+//!
+//! # fn main() {
+//! // Access std::process::Command.
+//! let mut shell_command = cmd!("echo OK");
+//! {
+//!   let mut command = &mut shell_command.command;
+//!   command.stdout(Stdio::piped());
+//! }
+//!
+//! // Access std::process::Child.
+//! let shell_child = shell_command.spawn().unwrap();
+//! {
+//!   let mut lock = shell_child.0.write().unwrap();
+//!   let mut child = &mut lock.as_mut().unwrap().child;
+//!   let mut str = String::new();
+//!   child.stdout.as_mut().unwrap().read_to_string(&mut str);
+//! }
+//! shell_child.wait().unwrap();
+//! # }
+//! ```
+//!
+//! ## License
+//! Apatch 2 License
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
@@ -111,12 +178,21 @@ extern crate libc;
 extern crate regex;
 extern crate env_logger;
 
-#[macro_use] pub mod command;
+#[macro_use] mod command;
 mod shell_child;
 mod shell_command;
 mod process_manager;
 mod local_shell;
-pub mod result;
+mod result;
 
+pub use command::new_command;
+pub use local_shell::ShellHandle;
 pub use local_shell::spawn;
 pub use process_manager::trap_signal_and_wait_children;
+pub use result::ShellError;
+pub use result::ShellResult;
+pub use result::ShellResultExt;
+pub use shell_child::ShellChild;
+pub use shell_child::ShellChildArc;
+pub use shell_child::ShellChildCore;
+pub use shell_command::ShellCommand;

@@ -4,7 +4,7 @@ extern crate env_logger;
 
 use std::thread;
 use std::time::Duration;
-use shell::result::ShellResult;
+use shell::ShellResult;
 use libc::c_int;
 
 fn setup() {
@@ -26,7 +26,8 @@ fn test_subshell_kill_child() {
     thread::sleep(Duration::from_millis(100));
     // Stop outputting process group.
     assert!(cmd!("pgrep sleep").run().is_ok());
-    assert!(job.terminate().is_ok());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
     assert!(cmd!("pgrep sleep").run().is_err());
 }
 
@@ -35,22 +36,22 @@ fn test_kill_all_after_wait() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
         cmd!("sleep 0.05").run()?;
-        cmd!("sleep 2").run()?;
-        Ok(())
+        cmd!("sleep 2").run()
     });
     thread::sleep(Duration::from_millis(100));
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]
 fn test_kill_thread_job() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
-        cmd!("sleep 5").run()?;
-        Ok(())
+        cmd!("sleep 5").run()
     });
     thread::sleep(Duration::from_millis(100));
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]
@@ -58,10 +59,10 @@ fn test_signal_before_run() {
     setup();
     let job = shell::spawn(|| -> ShellResult {
         thread::sleep(Duration::from_millis(100));
-        cmd!("sleep 1").run()?;
-        Ok(())
+        cmd!("sleep 1").run()
     });
-    assert!(job.terminate().unwrap().is_err());
+    job.signal(libc::SIGTERM);
+    assert!(job.join().unwrap().is_err());
 }
 
 #[test]

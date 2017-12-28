@@ -20,10 +20,12 @@ extern crate libc;
 use errno::Errno;
 use errno::errno;
 use std::convert::From;
+use std::default::Default;
 use std::env;
 use std::io;
-use std::process::ExitStatus;
+use std::marker::PhantomData;
 use std::os::unix::process::ExitStatusExt;
+use std::process::ExitStatus;
 
 #[derive(Debug)]
 pub enum ShellError {
@@ -52,7 +54,15 @@ impl From<env::VarError> for ShellError {
     }
 }
 
-pub type ShellResult = Result<(), ShellError>;
+pub struct SuccessfulExit(PhantomData<SuccessfulExit>);
+
+impl Default for SuccessfulExit {
+    fn default() -> Self {
+        SuccessfulExit(PhantomData::default())
+    }
+}
+
+pub type ShellResult = Result<SuccessfulExit, ShellError>;
 
 pub fn check_errno(name: &'static str,
                result: libc::c_int) -> Result<libc::c_int, ShellError> {
@@ -64,18 +74,16 @@ pub fn check_errno(name: &'static str,
 }
 
 pub trait ShellResultExt {
-    fn from_status(command: String, status: ExitStatus)
-        -> Result<(), ShellError>;
+    fn from_status(command: String, status: ExitStatus) -> Self;
     fn status(self) -> Result<ExitStatus, ShellError>;
     fn code(&self) -> u8;
-    fn print_error(self);
 }
 
-impl ShellResultExt for Result<(), ShellError> {
+impl ShellResultExt for ShellResult {
     fn from_status(command: String, status: ExitStatus)
-            -> Result<(), ShellError> {
+            -> Self {
         if status.success() {
-            Ok(())
+            Ok(SuccessfulExit(PhantomData::default()))
         } else {
             Err(ShellError::Status(command, status))
         }
@@ -96,15 +104,6 @@ impl ShellResultExt for Result<(), ShellError> {
                 status.code().unwrap_or(1) as u8
             },
             &Err(_) => 1
-        }
-    }
-
-    fn print_error(self) {
-        match self {
-            Ok(_) => return,
-            Err(err) => {
-                info!("Shell error {:?}", err);
-            }
         }
     }
 }
