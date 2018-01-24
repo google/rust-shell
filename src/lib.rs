@@ -58,7 +58,8 @@
 //! # }
 //! fn shell_function() -> ShellResult {
 //!   cmd!("echo Command A").run()?;
-//!   cmd!("echo Command B").run()
+//!   cmd!("echo Command B").run()?;
+//!   shell::ok()
 //! }
 //! ```
 //!
@@ -192,6 +193,7 @@ pub use process_manager::trap_signal_and_wait_children;
 pub use result::ShellError;
 pub use result::ShellResult;
 pub use result::ShellResultExt;
+pub use result::ok;
 pub use shell_child::ShellChild;
 pub use shell_child::ShellChildArc;
 pub use shell_child::ShellChildCore;
