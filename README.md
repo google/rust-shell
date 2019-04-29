@@ -11,7 +11,7 @@ systems.
 `run!` macro creates a ShellCommand instance which you can run by `run()`
 method.
 
-```
+```rust
 #[macro_use] extern crate shell;
 
 // Run command by cmd! macro
@@ -33,7 +33,7 @@ The return value of `ShellCommand#run()` is `ShellResult` which is `Ok(_)`
 only when the command successfully runs and its execution code is 0, so you
 can use `?` operator to check if the command successfully exits or not.
 
-```
+```rust
 #[macro_use] extern crate shell;
 use shell::ShellResult;
 
@@ -48,7 +48,7 @@ fn shell_function() -> ShellResult {
 
 ShellCommand has a shorthand to obtain stdout as UTF8 string.
 
-```
+```rust
 #[macro_use] extern crate shell;
 
 assert_eq!(cmd!("echo OK").stdout_utf8().unwrap(), "OK\n");
@@ -59,7 +59,7 @@ assert_eq!(cmd!("echo OK").stdout_utf8().unwrap(), "OK\n");
 ShellCommand has `spawn()` method which runs the command asynchronously and
 returns `ShellChild`.
 
-```
+```rust
 #[macro_use] extern crate shell;
 extern crate libc;
 use shell::ShellResultExt;
@@ -86,7 +86,7 @@ returns `ShellHandle` wrapping `std::thread::JoinHandle`.
 thread.  It also stops launching a new process by `ShellComamnd::run()` on
 that thread.
 
-```
+```rust
 #[macro_use] extern crate shell;
 extern crate libc;
 use shell::ShellResult;
@@ -107,7 +107,7 @@ assert!(result.status().is_ok(), "Still able to obtain status");
 waits all child processes before exiting the process when receiving these
 signals. The function needs to be called before launching any new thread.
 
-```
+```rust
 extern crate shell;
 shell::trap_signal_and_wait_children().unwrap();
 ```
@@ -118,7 +118,7 @@ shell::trap_signal_and_wait_children().unwrap();
 `std::process::Child`. Both underlaying objects are accessible via public
 fields.
 
-```
+```rust
 #[macro_use] extern crate shell;
 use std::process::Stdio;
 use std::io::Read;
