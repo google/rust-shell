@@ -20,6 +20,8 @@ use errno::errno;
 use std::convert::From;
 use std::default::Default;
 use std::env;
+use std::error;
+use std::fmt;
 use std::io;
 use std::marker::PhantomData;
 use std::os::unix::process::ExitStatusExt;
@@ -51,6 +53,20 @@ impl From<env::VarError> for ShellError {
         ShellError::VarError(error)
     }
 }
+
+impl fmt::Display for ShellError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ShellError::Status(_, status) => write!(f, "command failed with exit code {}", status),
+            ShellError::IoError(ref e) => e.fmt(f),
+            ShellError::VarError(ref e) => e.fmt(f),
+            ShellError::Errno(_, ref e) => e.fmt(f),
+            ShellError::NoSuchProcess => "unable to acquire handle to process".fmt(f),
+        }
+    }
+}
+
+impl error::Error for ShellError {}
 
 pub struct SuccessfulExit(PhantomData<SuccessfulExit>);
 
